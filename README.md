@@ -4,6 +4,8 @@ Recursos interactivos para estudiar cómo una CPU busca, decodifica y ejecuta in
 
 **Creado por Ing. Heiner Guido Cambronero, Lic.**
 
+**Abrir en línea:** https://heinergc.github.io/arquitectura-computadores-03306/
+
 ## Recursos
 
 | Figura | Recurso | Qué es |
