@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Ing. Heiner Guido Cambronero, Lic.">
+<meta name="description" content="Recursos interactivos de Arquitectura de Computadores (03306, UNED): CPU Quest, Von Neumann en movimiento y Glosario bilingüe.">
+<title>Laboratorio de la Unidad de Control · 03306 UNED</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='4' fill='%2316223d'/%3E%3Cpath d='M9 16h14M16 9v14' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+@font-face{font-family:"Source Serif 4";src:url(assets/fonts/source-serif-4.woff2) format("woff2");font-weight:200 900;font-display:swap}
+@font-face{font-family:"Source Sans 3";src:url(assets/fonts/source-sans-3.woff2) format("woff2");font-weight:200 900;font-display:swap}
+@font-face{font-family:"Source Sans 3";src:url(assets/fonts/source-sans-3-italic.woff2) format("woff2");font-style:italic;font-weight:400;font-display:swap}
+
+:root{
+  --page:#eaeef5;      /* papel de lámina, azul grisáceo */
+  --plate:#ffffff;     /* recuadro de figura */
+  --ink:#16223d;       /* tinta principal */
+  --ink-2:#46526b;     /* tinta secundaria */
+  --fig:#2350c8;       /* azul de figura: trazos, números de figura, enlaces */
+  --fig-tint:#e3eafb;
+  --data:#a8470a;      /* segunda tinta de figura: el dato que viaja */
+  --rule:#c3cbda;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --sans:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --gutter:clamp(16px,4vw,56px);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--page);color:var(--ink);font:400 17px/1.6 var(--sans);font-variant-numeric:lining-nums}
+::selection{background:var(--fig);color:#fff}
+a{color:var(--fig);text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--fig);outline-offset:3px;border-radius:2px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;color:var(--ink);text-wrap:balance;margin:0}
+p{margin:0}
+.wrap{max-width:1280px;margin:0 auto;padding:0 var(--gutter)}
+
+/* ---------- Cabecera corrida (running head) ---------- */
+.runhead{border-bottom:1px solid var(--rule);font-size:14px;color:var(--ink-2)}
+.runhead .wrap{display:flex;justify-content:space-between;gap:8px 24px;flex-wrap:wrap;padding-top:14px;padding-bottom:12px}
+.runhead b{color:var(--ink);font-weight:600}
+.smallcaps{font-variant:small-caps;letter-spacing:.04em;text-transform:lowercase}
+
+/* ---------- Apertura del capítulo ---------- */
+.opener{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:40px 64px;padding:clamp(40px,7vw,88px) 0 clamp(32px,5vw,56px)}
+.chapter{display:flex;gap:28px;align-items:flex-start}
+.chapter-num{font:600 clamp(5rem,11vw,8.5rem)/.8 var(--serif);color:var(--fig);flex:none;margin-top:4px}
+h1{font-size:clamp(2.2rem,4.4vw,3.6rem);line-height:1.08;letter-spacing:-.01em}
+.lead{margin-top:20px;font-size:clamp(1.05rem,1.4vw,1.2rem);max-width:62ch;color:var(--ink)}
+.credit{margin-top:22px;font-size:15px;color:var(--ink-2)}
+.credit b{color:var(--ink);font-weight:600}
+
+.toc{border-top:2px solid var(--ink);padding-top:14px;align-self:start}
+.toc h2{font-size:1.25rem;margin-bottom:8px}
+.toc ol{list-style:none;margin:0;padding:0}
+.toc li{display:grid;grid-template-columns:3.2em 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--rule)}
+.toc .n{font:600 17px/1.4 var(--serif);color:var(--fig);font-variant-caps:small-caps;letter-spacing:.02em}
+.toc .sec{list-style:none;margin:14px 0 0;padding:0;border-top:2px solid var(--ink)}
+.toc .sec li{display:block;padding:9px 0}
+.toc .sec a{font-weight:400}
+.toc a{color:var(--ink);font-weight:600;text-decoration:none}
+.toc a:hover{color:var(--fig);text-decoration:underline}
+.toc span.d{display:block;font-size:15px;color:var(--ink-2)}
+.last-flag{display:none;margin-left:8px;font-size:13px;font-weight:600;color:var(--data)}
+.is-last .last-flag{display:inline}
+
+/* ---------- Láminas de figura ---------- */
+.plates{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-template-rows:auto auto;gap:24px;padding-bottom:clamp(48px,7vw,96px)}
+.plate{margin:0;background:var(--plate);border:1px solid var(--rule);display:flex;flex-direction:column}
+.plate.r1{grid-column:1 / span 7;grid-row:1 / span 2}
+.plate.r2{grid-column:8 / span 5}
+.plate.r3{grid-column:8 / span 5}
+.art{padding:24px 24px 8px;border-bottom:1px solid var(--rule)}
+.art svg{display:block;width:100%;height:auto}
+.art .r1-m{display:none}
+figcaption{padding:18px 24px 22px;display:flex;flex-direction:column;gap:10px;flex:1}
+.fignum{font:600 17px/1.3 var(--serif);color:var(--fig);font-variant-caps:small-caps;letter-spacing:.02em}
+.plate h3{font-size:1.5rem;line-height:1.2}
+.plate.r1 h3{font-size:1.9rem}
+.plate p{color:var(--ink);max-width:62ch}
+.facts{display:flex;flex-wrap:wrap;gap:4px 18px;margin:2px 0 0;padding:0;list-style:none;font-size:15px;color:var(--ink-2)}
+.facts li{display:flex;align-items:center;gap:7px}
+.facts li::before{content:"";width:5px;height:5px;background:var(--fig);flex:none}
+.open{margin-top:auto;padding-top:6px;display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:17px;text-decoration:none;align-self:flex-start}
+.open svg{width:18px;height:18px;transition:transform .35s cubic-bezier(.16,1,.3,1)}
+.open:hover svg,.open:focus-visible svg{transform:translateX(4px)}
+.open:hover span{text-decoration:underline;text-underline-offset:3px}
+
+/* Elementos de los diagramas */
+.d-box{fill:var(--plate);stroke:var(--ink);stroke-width:1.6}
+.d-box.uc{fill:var(--fig-tint);stroke:var(--fig)}
+.d-lbl{font:600 15px var(--sans);fill:var(--ink)}
+.d-sub{font:400 12.5px var(--sans);fill:var(--ink-2)}
+.d-wire{fill:none;stroke:var(--fig);stroke-width:2}
+.d-bus{fill:none;stroke:var(--ink);stroke-width:5;stroke-linecap:round}
+.d-tok{fill:var(--data)}
+.d-toktxt{font:700 11px var(--sans);fill:#fff}
+.d-ttl{font:600 13px var(--sans);fill:var(--ink-2)}
+.cell{fill:var(--plate);stroke:var(--rule);stroke-width:1;transition:fill .25s ease-out,stroke .25s ease-out}
+.play .cell.i{fill:var(--fig);stroke:var(--fig)}
+.play .cell.d{fill:var(--data);stroke:var(--data)}
+.d-count{font:600 14px var(--sans);fill:var(--ink)}
+.entry-term{font:600 30px var(--serif);fill:var(--ink)}
+.entry-en{font:italic 400 17px var(--sans);fill:var(--fig)}
+.entry-es{font:600 17px var(--sans);fill:var(--ink)}
+.entry-def{font:400 16px var(--sans);fill:var(--ink-2)}
+.entry-tag{font:600 12px var(--sans);fill:var(--fig);letter-spacing:.08em}
+svg.big .d-sub{font-size:14px}
+svg.big .d-ttl{font-size:15px}
+svg.big .d-count{font-size:15px}
+/* Figura R.3: el término cambia de idioma (inglés ↔ español) */
+.face{transition:opacity .45s cubic-bezier(.16,1,.3,1),transform .45s cubic-bezier(.16,1,.3,1)}
+.face.es{opacity:0;transform:translateY(8px)}
+.es-on .face.en{opacity:0;transform:translateY(-8px)}
+.es-on .face.es{opacity:1;transform:none}
+
+/* ---------- Secciones de lectura ---------- */
+.section{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:24px 64px;padding:clamp(40px,6vw,72px) 0;border-top:2px solid var(--ink)}
+.section h2{font-size:clamp(1.6rem,2.6vw,2.1rem);line-height:1.15}
+.section .side-note{margin-top:12px;color:var(--ink-2);font-size:16px;max-width:36ch}
+.route{list-style:none;margin:0;padding:0;counter-reset:r}
+.route li{display:grid;grid-template-columns:3.5em 1fr;gap:16px;padding:18px 0;border-bottom:1px solid var(--rule)}
+.route li:first-child{padding-top:0}
+.route .step{font:600 17px/1.5 var(--serif);color:var(--fig);font-variant-caps:small-caps;letter-spacing:.02em}
+.route h3{font-size:1.25rem;margin-bottom:4px}
+.route p{max-width:64ch}
+
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;position:relative}
+.levels{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 28px;max-width:600px}
+.levels li{display:grid;grid-template-columns:2.4em 1fr;gap:8px;padding:9px 0;border-top:1px solid var(--rule);font-size:16px}
+.levels .ln{font:600 17px/1.5 var(--serif);color:var(--fig);font-variant-caps:small-caps;letter-spacing:.02em}
+.levels b{font-weight:600}
+.levels span.d{display:block;color:var(--ink-2);font-size:15px}
+@media (max-width:560px){.levels{grid-template-columns:minmax(0,1fr)}}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:16px}
+caption{caption-side:bottom;text-align:left;padding-top:12px;font-size:15px;color:var(--ink-2)}
+caption b{font:600 17px var(--serif);color:var(--fig);font-variant-caps:small-caps;letter-spacing:.02em}
+th,td{padding:11px 12px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:middle}
+thead th{border-bottom:2px solid var(--ink);font-weight:600;font-size:15px}
+thead th.c,td.c{text-align:center;width:13%}
+tbody th{font-weight:400}
+.mark{display:inline-block;width:12px;height:12px;background:var(--fig)}
+.mark.part{background:transparent;border:2px solid var(--fig)}
+.none{color:var(--ink-2)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- Cierre ---------- */
+footer{background:var(--ink);color:#dfe5f1;margin-top:clamp(24px,4vw,48px)}
+footer .wrap{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:24px 64px;padding-top:48px;padding-bottom:48px}
+footer h2{color:#fff;font-size:1.6rem}
+footer p{margin-top:10px;max-width:58ch}
+footer a{color:#b9cbff}
+footer ul{list-style:none;margin:0;padding:0}
+footer li{padding:8px 0;border-bottom:1px solid #34405e}
+
+@media (max-width:980px){
+  .opener,.section,footer .wrap{grid-template-columns:minmax(0,1fr)}
+  .plate.r1,.plate.r2,.plate.r3{grid-column:1 / -1;grid-row:auto}
+}
+@media (max-width:560px){
+  body{font-size:16px}
+  .chapter{flex-direction:column;gap:8px}
+  .art{padding:16px 14px 6px}
+  figcaption{padding:16px}
+  .plate.r1 h3{font-size:1.6rem}
+  .art .r1-d{display:none}
+  .art .r1-m{display:block}
+  svg.big .d-sub,svg.big .d-ttl,svg.big .d-count{font-size:18px}
+  /* Tabla: las tres columnas de marcas caben sin desplazamiento */
+  table{min-width:0;table-layout:fixed;font-size:15px}
+  thead th.c,td.c{width:44px;padding-left:4px;padding-right:4px}
+  th,td{padding:10px 6px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .cell,.face,.open svg{transition:none}
+}
+</style>
+</head>
+<body>
+
+<header class="runhead">
+  <div class="wrap">
+    <span><b>Arquitectura de Computadores</b> · <span class="smallcaps">Código</span> 03306 · UNED</span>
+    <span>Capítulo R · Recursos interactivos</span>
+  </div>
+</header>
+
+<main id="contenido">
+  <div class="wrap">
+
+    <section class="opener" aria-labelledby="titulo">
+      <div>
+        <div class="chapter">
+          <span class="chapter-num" aria-hidden="true">R</span>
+          <div>
+            <h1 id="titulo">Laboratorio de la Unidad de Control</h1>
+            <p class="lead">Tres recursos para ver por dentro cómo una CPU busca, decodifica y ejecuta instrucciones: un juego en el que tú diriges la Unidad de Control, una animación del bus de Von Neumann frente a Harvard y un glosario bilingüe con diagramas. Funcionan en el navegador, sin instalar nada.</p>
+            <p class="credit">Creado por <b>Ing. Heiner Guido Cambronero, Lic.</b></p>
+          </div>
+        </div>
+      </div>
+
+      <nav class="toc" aria-labelledby="toc-t">
+        <h2 id="toc-t">Contenido</h2>
+        <ol>
+          <li data-res="cpu-quest"><span class="n">R.1</span><span><a href="recursos/cpu-quest.html">CPU Quest: Misión Unidad de Control</a><span class="last-flag">Último abierto</span><span class="d">Juego de seis misiones</span></span></li>
+          <li data-res="von-neumann"><span class="n">R.2</span><span><a href="recursos/von-neumann.html">Von Neumann en movimiento</a><span class="last-flag">Último abierto</span><span class="d">Animación ciclo a ciclo</span></span></li>
+          <li data-res="glosario"><span class="n">R.3</span><span><a href="recursos/glosario.html">Glosario bilingüe</a><span class="last-flag">Último abierto</span><span class="d">Términos, diagramas y simulación</span></span></li>
+        </ol>
+        <ul class="sec" aria-label="En esta página">
+          <li><a href="#ruta">Ruta de estudio sugerida</a></li>
+          <li><a href="#conceptos">Conceptos por recurso</a></li>
+        </ul>
+      </nav>
+    </section>
+
+    <section class="plates" aria-label="Recursos">
+
+      <!-- Figura R.1: camino de datos del FETCH -->
+      <figure class="plate r1" data-res="cpu-quest">
+        <div class="art">
+          <!-- Versión vertical para teléfonos: misma ruta, etiquetas legibles -->
+          <svg class="r1-m" viewBox="0 0 320 240" role="img" aria-labelledby="r1m-t">
+            <title id="r1m-t">Ciclo de búsqueda: PC, MAR, memoria, MBR, IR y Unidad de Control.</title>
+            <rect class="d-box" x="2" y="14" width="88" height="44" rx="4"/><text class="d-lbl" x="14" y="42">PC</text>
+            <rect class="d-box" x="112" y="14" width="88" height="44" rx="4"/><text class="d-lbl" x="124" y="42">MAR</text>
+            <rect class="d-box" x="222" y="4" width="96" height="150" rx="4"/><text class="d-lbl" x="232" y="28">Memoria</text>
+            <g class="d-lbl" style="font-weight:400;font-size:14px"><text x="232" y="54">0 LOAD</text><text x="232" y="76">1 LOAD</text><text x="232" y="98">2 ADD</text><text x="232" y="120">3 STORE</text><text x="232" y="142">4 HALT</text></g>
+            <rect class="d-box" x="112" y="96" width="88" height="44" rx="4"/><text class="d-lbl" x="124" y="124">MBR</text>
+            <rect class="d-box" x="2" y="186" width="88" height="44" rx="4"/><text class="d-lbl" x="14" y="214">IR</text>
+            <rect class="d-box uc" x="112" y="186" width="168" height="44" rx="4"/><text class="d-lbl" x="122" y="214">Unidad de Control</text>
+            <g class="d-wire"><path d="M90 36 H112"/><path d="M200 36 H222"/><path d="M222 118 H200"/><path d="M156 140 V164 H46 V186"/><path d="M90 208 H112"/></g>
+            <path id="r1m-path" d="M90 36 H112 M200 36 H222 M222 118 H200 M156 140 V164 H46 V186 M90 208 H112" fill="none" stroke="none"/>
+            <g id="r1m-tok" transform="translate(90,36)">
+              <rect class="d-tok" x="-24" y="-12" width="48" height="24" rx="12"/>
+              <text class="d-toktxt" x="0" y="5" text-anchor="middle" style="font-size:13px">0</text>
+            </g>
+          </svg>
+          <svg class="r1-d" viewBox="0 0 600 330" role="img" aria-labelledby="r1-t">
+            <title id="r1-t">Camino de datos simplificado: el PC envía la dirección al MAR, la memoria entrega la instrucción al MBR, pasa al IR y la Unidad de Control la decodifica.</title>
+            <text class="d-ttl" x="0" y="14">Ciclo de búsqueda (FETCH)</text>
+            <path class="d-bus" d="M40 176 H436"/>
+            <text class="d-sub" x="300" y="198">bus interno</text>
+            <g>
+              <rect class="d-box" x="20" y="96" width="104" height="54" rx="4"/><text class="d-lbl" x="34" y="120">PC</text><text class="d-sub" x="34" y="139">próxima instr.</text>
+              <rect class="d-box" x="176" y="96" width="104" height="54" rx="4"/><text class="d-lbl" x="190" y="120">MAR</text><text class="d-sub" x="190" y="139">dirección</text>
+              <rect class="d-box" x="332" y="96" width="104" height="54" rx="4"/><text class="d-lbl" x="346" y="120">MBR</text><text class="d-sub" x="346" y="139">dato leído</text>
+              <rect class="d-box" x="176" y="226" width="104" height="54" rx="4"/><text class="d-lbl" x="190" y="250">IR</text><text class="d-sub" x="190" y="269">instrucción</text>
+              <rect class="d-box uc" x="332" y="226" width="148" height="54" rx="4"/><text class="d-lbl uc-lbl" x="346" y="250">Unidad de Control</text><text class="d-sub" x="346" y="269">decodifica</text>
+              <rect class="d-box" x="500" y="40" width="96" height="190" rx="4"/><text class="d-lbl" x="512" y="64">Memoria</text>
+              <g class="d-sub"><text x="512" y="96">0 LOAD</text><text x="512" y="118">1 LOAD</text><text x="512" y="140">2 ADD</text><text x="512" y="162">3 STORE</text><text x="512" y="184">4 HALT</text></g>
+            </g>
+            <g class="d-wire">
+              <path d="M72 150 V176"/><path d="M228 150 V176"/><path d="M384 150 V176"/><path d="M228 176 V226"/>
+              <path d="M228 96 V68 H500"/><path d="M500 123 H436"/><path d="M280 253 H332"/>
+            </g>
+            <text class="d-sub" x="300" y="62">bus de direcciones</text>
+            <path id="r1-path" d="M72 176 H228 V96 V68 H500 M500 123 H436 M384 150 V176 H228 V226 M280 253 H332" fill="none" stroke="none"/>
+            <g id="r1-tok" transform="translate(72,176)">
+              <rect class="d-tok" x="-22" y="-11" width="44" height="22" rx="11"/>
+              <text class="d-toktxt" x="0" y="4" text-anchor="middle" id="r1-tokt">0</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption>
+          <span class="fignum">Figura R.1</span>
+          <h3><a href="recursos/cpu-quest.html" style="color:inherit;text-decoration:none">CPU Quest: Misión Unidad de Control</a></h3>
+          <p>Un videojuego en el que tú tomas las decisiones de la Unidad de Control: identificas componentes, activas señales, ordenas el FETCH, ejecutas un programa completo, depuras tablas con errores y decides los saltos condicionales. Cada acción mueve datos reales por la CPU animada, y cada error se explica para que lo corrijas sin empezar de nuevo.</p>
+          <ul class="facts"><li>Modo guiado y modo desafío</li><li>Guarda tu progreso en el navegador</li></ul>
+          <ol class="levels" aria-label="Misiones de CPU Quest">
+            <li><span class="ln">N1</span><span><b>Conoce tu CPU</b><span class="d">Identifica componentes y buses</span></span></li>
+            <li><span class="ln">N2</span><span><b>Activa las señales</b><span class="d">LOAD, STORE, ADD y HALT</span></span></li>
+            <li><span class="ln">N3</span><span><b>Construye FETCH</b><span class="d">Ordena t1, t2, t3 y DECODE</span></span></li>
+            <li><span class="ln">N4</span><span><b>Ejecuta instrucciones</b><span class="d">Hasta Memoria[502] = 8</span></span></li>
+            <li><span class="ln">N5</span><span><b>Depura la CPU</b><span class="d">Encuentra la señal errónea</span></span></li>
+            <li><span class="ln">N6</span><span><b>Saltos condicionales</b><span class="d">JZ y la bandera Z</span></span></li>
+          </ol>
+          <a class="open" href="recursos/cpu-quest.html"><span>Abrir CPU Quest</span><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M2 9h13M10 4l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+        </figcaption>
+      </figure>
+
+      <!-- Figura R.2: uso del bus -->
+      <figure class="plate r2" data-res="von-neumann">
+        <div class="art">
+          <svg viewBox="0 0 440 178" role="img" aria-labelledby="r2-t" class="big">
+            <title id="r2-t">Uso del bus en el programa 5 + 3: con un bus único las instrucciones y los datos se turnan y el programa tarda 20 ciclos; con dos buses tarda 14.</title>
+            <text class="d-ttl" x="0" y="16">Von Neumann · un bus</text>
+            <g id="r2-vn"></g>
+            <text class="d-count" x="440" y="16" text-anchor="end">20 ciclos</text>
+            <text class="d-ttl" x="0" y="86">Harvard · dos buses</text>
+            <text class="d-count" x="440" y="86" text-anchor="end">14 ciclos</text>
+            <g id="r2-h"></g>
+            <g class="d-sub"><rect x="0" y="160" width="12" height="12" fill="var(--fig)"/><text x="18" y="171">instrucción</text><rect x="110" y="160" width="12" height="12" fill="var(--data)"/><text x="128" y="171">dato</text></g>
+          </svg>
+        </div>
+        <figcaption>
+          <span class="fignum">Figura R.2</span>
+          <h3><a href="recursos/von-neumann.html" style="color:inherit;text-decoration:none">Von Neumann en movimiento</a></h3>
+          <p>Sigue, ciclo a ciclo, un programa que suma 5 + 3 y observa quién ocupa el bus. Cambia a Harvard y compara: con dos buses la siguiente instrucción llega mientras se accede a los datos.</p>
+          <a class="open" href="recursos/von-neumann.html"><span>Abrir la animación</span><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M2 9h13M10 4l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+        </figcaption>
+      </figure>
+
+      <!-- Figura R.3: entrada de glosario -->
+      <figure class="plate r3" data-res="glosario">
+        <div class="art">
+          <svg viewBox="0 0 420 150" role="img" aria-labelledby="r3-t">
+            <title id="r3-t">Entrada del glosario: MAR, Memory Address Register, Registro de Dirección de Memoria.</title>
+            <text class="entry-term" x="0" y="34">MAR</text>
+            <g class="face en"><text class="entry-tag" x="0" y="66">INGLÉS</text><text class="entry-en" x="0" y="88">Memory Address Register</text></g>
+            <g class="face es"><text class="entry-tag" x="0" y="66">ESPAÑOL</text><text class="entry-es" x="0" y="88">Registro de Dirección de Memoria</text></g>
+            <text class="entry-def" x="0" y="120">Almacena la dirección de memoria a la que se</text>
+            <text class="entry-def" x="0" y="140">desea acceder.</text>
+          </svg>
+        </div>
+        <figcaption>
+          <span class="fignum">Figura R.3</span>
+          <h3><a href="recursos/glosario.html" style="color:inherit;text-decoration:none">Glosario bilingüe de Arquitectura de Computadores</a></h3>
+          <p>Busca una sigla, el término en inglés o su traducción. Incluye diagramas, el ejemplo aplicado de <code>LOAD R1, [500]</code> y una simulación del ciclo de instrucción.</p>
+          <ul class="facts"><li>60 términos</li><li>5 categorías</li><li>Funciona sin conexión</li></ul>
+          <a class="open" href="recursos/glosario.html"><span>Abrir el glosario</span><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M2 9h13M10 4l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section class="section" id="ruta" aria-labelledby="ruta-t">
+      <div>
+        <h2 id="ruta-t">Ruta de estudio sugerida</h2>
+        <p class="side-note">Si es tu primera vez con el tema, este orden va de los términos a la práctica.</p>
+      </div>
+      <ol class="route">
+        <li><span class="step">1 · R.3</span><div><h3>Fija el vocabulario</h3><p>Repasa en el glosario los registros (PC, IR, MAR, MBR), los buses y las señales de control. Te servirá para leer las otras dos figuras sin tropiezos.</p></div></li>
+        <li><span class="step">2 · R.2</span><div><h3>Mira el ciclo completo</h3><p>Reproduce la animación de Von Neumann paso a paso: búsqueda, decodificación y ejecución, y por qué el bus compartido obliga a turnarse.</p></div></li>
+        <li><span class="step">3 · R.1</span><div><h3>Constrúyelo tú</h3><p>En CPU Quest ya no miras: decides. Activa señales, ordena microoperaciones y observa la consecuencia de cada error en la CPU.</p></div></li>
+      </ol>
+    </section>
+
+    <section class="section" id="conceptos" aria-labelledby="conc-t">
+      <div>
+        <h2 id="conc-t">Conceptos por recurso</h2>
+        <p class="side-note">Qué tema del curso trabaja cada figura, para que vayas directo a lo que estás estudiando.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <caption><b>Tabla R.1</b> Cobertura de conceptos. Cuadro lleno: se trabaja de forma interactiva. Cuadro vacío: aparece como término o explicación.</caption>
+          <thead><tr><th scope="col">Concepto</th><th scope="col" class="c">R.1<span class="sr"> CPU Quest</span></th><th scope="col" class="c">R.2<span class="sr"> Von Neumann</span></th><th scope="col" class="c">R.3<span class="sr"> Glosario</span></th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Componentes: PC, IR, MAR, MBR, ALU, UC</th><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td></tr>
+            <tr><th scope="row">Buses de direcciones, datos y control</th><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c"><span class="mark part"></span><span class="sr">término</span></td></tr>
+            <tr><th scope="row">Ciclo de búsqueda (FETCH)</th><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td></tr>
+            <tr><th scope="row">Microoperaciones y señales de control</th><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c none">—<span class="sr">no se trata</span></td><td class="c"><span class="mark part"></span><span class="sr">término</span></td></tr>
+            <tr><th scope="row">Ejecución de LOAD, ADD, STORE y HALT</th><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c"><span class="mark part"></span><span class="sr">término</span></td></tr>
+            <tr><th scope="row">Von Neumann frente a Harvard</th><td class="c none">—<span class="sr">no se trata</span></td><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td></tr>
+            <tr><th scope="row">Saltos condicionales y bandera Z</th><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c none">—<span class="sr">no se trata</span></td><td class="c"><span class="mark part"></span><span class="sr">término</span></td></tr>
+            <tr><th scope="row">Depuración de señales erróneas</th><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td><td class="c none">—<span class="sr">no se trata</span></td><td class="c none">—<span class="sr">no se trata</span></td></tr>
+            <tr><th scope="row">Terminología en inglés y español</th><td class="c none">—<span class="sr">no se trata</span></td><td class="c none">—<span class="sr">no se trata</span></td><td class="c"><span class="mark"></span><span class="sr">interactivo</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <h2>Arquitectura de Computadores · 03306</h2>
+      <p>Recursos de apoyo para estudiantes de la UNED, basados en los conceptos de Unidad de Control y ciclo de instrucción (Stallings, capítulo 19). Son material didáctico complementario, no documentos institucionales oficiales.</p>
+      <p>Creado por <b>Ing. Heiner Guido Cambronero, Lic.</b></p>
+    </div>
+    <ul>
+      <li><a href="recursos/cpu-quest.html">R.1 CPU Quest</a></li>
+      <li><a href="recursos/von-neumann.html">R.2 Von Neumann en movimiento</a></li>
+      <li><a href="recursos/glosario.html">R.3 Glosario bilingüe</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  var NS = 'http://www.w3.org/2000/svg';
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* Último recurso abierto: se marca en el índice al volver */
+  try {
+    var last = localStorage.getItem('portal03306_ultimo');
+    if (last) document.querySelectorAll('.toc li[data-res="' + last + '"]').forEach(function (li) { li.classList.add('is-last'); });
+  } catch (e) {}
+  document.querySelectorAll('[data-res] a').forEach(function (a) {
+    a.addEventListener('click', function () {
+      var r = a.closest('[data-res]').getAttribute('data-res');
+      try { localStorage.setItem('portal03306_ultimo', r); } catch (e) {}
+    });
+  });
+
+  /* Figura R.2: celdas del uso del bus (secuencia real del programa 5 + 3) */
+  function cells(g, seq, x0, y, w) {
+    seq.forEach(function (k, i) {
+      var r = document.createElementNS(NS, 'rect');
+      r.setAttribute('x', x0 + i * (w + 3)); r.setAttribute('y', y);
+      r.setAttribute('width', w); r.setAttribute('height', 20);
+      r.setAttribute('class', 'cell' + (k ? ' ' + k : ''));
+      r.style.transitionDelay = (i * 60) + 'ms';
+      g.appendChild(r);
+    });
+  }
+  /* Von Neumann: por instrucción, F1 (sin bus), F2 (bus: instrucción), DEC, y para LOAD/ADD/STORE el acceso al dato */
+  var vn = ['', 'i', '', '', 'd', '',   '', 'i', '', '', 'd', '',   '', 'i', '', '', 'd',   '', 'i', ''];
+  cells(document.getElementById('r2-vn'), vn, 0, 28, 19);
+  var hI = ['i', 'i', '', 'i', 'i', '', '', 'i', 'i', '', '', 'i', 'i', ''];
+  var hD = ['', '', '', '', 'd', '', '', '', 'd', '', '', '', 'd', ''];
+  var hg = document.getElementById('r2-h');
+  cells(hg, hI, 0, 98, 19); cells(hg, hD, 0, 124, 19);
+
+  /* Figura R.1: el contenido del PC viaja hasta la UC */
+  /* Dos versiones del diagrama (escritorio y teléfono); se anima la visible.
+     addr = longitud del tramo en que viaja la dirección (PC → MAR → memoria); después viaja la instrucción. */
+  var R1 = [
+    { svg: document.querySelector('.r1-d'), path: document.getElementById('r1-path'), tok: document.getElementById('r1-tok'), addr: 536, home: 'translate(72,176)' },
+    { svg: document.querySelector('.r1-m'), path: document.getElementById('r1m-path'), tok: document.getElementById('r1m-tok'), addr: 44, home: 'translate(90,36)' }
+  ];
+  var running = false;
+  function runR1() {
+    if (running || reduce) return;
+    var v = R1[0].svg.getBoundingClientRect().width ? R1[0] : R1[1];
+    var txt = v.tok.querySelector('text');
+    running = true;
+    var L = v.path.getTotalLength(), t0 = performance.now(), dur = 2600;
+    (function frame(now) {
+      var p = Math.min(1, (now - t0) / dur);
+      var d = (1 - Math.pow(1 - p, 3)) * L;
+      var pt = v.path.getPointAtLength(d);
+      v.tok.setAttribute('transform', 'translate(' + pt.x + ',' + pt.y + ')');
+      txt.textContent = d < v.addr ? '0' : 'LOAD';
+      if (p < 1) requestAnimationFrame(frame);
+      else setTimeout(function () { v.tok.setAttribute('transform', v.home); txt.textContent = '0'; running = false; }, 900);
+    })(t0);
+  }
+
+  function play(fig) {
+    if (fig.classList.contains('r1')) return runR1();
+    if (fig.classList.contains('r3')) { fig.classList.toggle('es-on'); return; }
+    fig.classList.remove('play'); void fig.getBoundingClientRect(); fig.classList.add('play');
+  }
+  var figs = document.querySelectorAll('.plate');
+  if (reduce) { figs.forEach(function (f) { f.classList.add('play'); }); return; }
+  /* Cada figura se ejecuta una vez al entrar en pantalla y de nuevo al pasar el puntero o enfocarla */
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (en) { if (en.isIntersecting) { play(en.target); io.unobserve(en.target); } });
+    }, { threshold: 0.5 });
+    figs.forEach(function (f) { io.observe(f); });
+  } else figs.forEach(play);
+  figs.forEach(function (f) {
+    f.addEventListener('mouseenter', function () { play(f); });
+    f.addEventListener('focusin', function () { play(f); });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-12T18:00:00Z",
+  "title": "Design System: Laboratorio de la Unidad de Control · 03306 UNED",
+  "extensions": {
+    "colorMeta": {
+      "page": { "role": "neutral", "displayName": "Plate Paper", "canonical": "#eaeef5", "tonalRamp": ["#2f3644", "#4f586a", "#717b8f", "#959eb1", "#b9c1d1", "#d2d9e5", "#eaeef5", "#f6f8fb"] },
+      "plate": { "role": "neutral", "displayName": "Plate White", "canonical": "#ffffff", "tonalRamp": ["#262a31", "#4a505b", "#6f7684", "#959caa", "#bcc2cd", "#dde1e8", "#f3f5f8", "#ffffff"] },
+      "ink": { "role": "neutral", "displayName": "Navy Ink", "canonical": "#16223d", "tonalRamp": ["#0a1020", "#16223d", "#2a3757", "#46526b", "#6b7690", "#9aa3b8", "#c9d0de", "#eef1f6"] },
+      "ink-2": { "role": "neutral", "displayName": "Slate Ink", "canonical": "#46526b", "tonalRamp": ["#151a24", "#262e3f", "#36405a", "#46526b", "#66718a", "#8f98ad", "#bcc3d2", "#e6e9f0"] },
+      "fig": { "role": "primary", "displayName": "Figure Blue", "canonical": "#2350c8", "tonalRamp": ["#0f2257", "#163680", "#1d45a8", "#2350c8", "#4a72dc", "#7e9be8", "#b4c6f3", "#e3eafb"] },
+      "fig-tint": { "role": "primary", "displayName": "Figure Blue Tint", "canonical": "#e3eafb", "tonalRamp": ["#0f2257", "#163680", "#1d45a8", "#2350c8", "#4a72dc", "#7e9be8", "#b4c6f3", "#e3eafb"] },
+      "data": { "role": "secondary", "displayName": "Data Amber", "canonical": "#a8470a", "tonalRamp": ["#3d1903", "#632a05", "#86390a", "#a8470a", "#cb6526", "#e08f5c", "#efbd9b", "#f9e6d9"] },
+      "rule": { "role": "neutral", "displayName": "Hairline", "canonical": "#c3cbda", "tonalRamp": ["#2f3644", "#4f586a", "#717b8f", "#959eb1", "#b0b9ca", "#c3cbda", "#dce2ec", "#f1f4f8"] },
+      "ink-rule": { "role": "neutral", "displayName": "On-Ink Divider", "canonical": "#34405e", "tonalRamp": ["#0a1020", "#16223d", "#34405e", "#4f5b78", "#6f7a95", "#98a1b7", "#c6cdda", "#eef1f6"] },
+      "on-ink": { "role": "neutral", "displayName": "On-Ink Text", "canonical": "#dfe5f1", "tonalRamp": ["#2b3140", "#4a5266", "#6c758b", "#9098ad", "#b5bccd", "#cfd6e5", "#dfe5f1", "#f4f6fb"] },
+      "on-ink-quiet": { "role": "neutral", "displayName": "On-Ink Quiet", "canonical": "#c9d3ea", "tonalRamp": ["#26304a", "#434f6d", "#64708f", "#8692b0", "#a8b3cd", "#c9d3ea", "#dfe5f4", "#f3f6fc"] },
+      "on-ink-link": { "role": "primary", "displayName": "On-Ink Link Blue", "canonical": "#b9cbff", "tonalRamp": ["#13235c", "#24398a", "#3a52b5", "#5a74d9", "#8aa2f2", "#b9cbff", "#d9e3ff", "#f1f5ff"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Chapter Letter", "purpose": "The chapter letter «R» in Figure Blue beside the title; once per page." },
+      "headline": { "displayName": "Headline", "purpose": "Page title (h1), balanced wrap." },
+      "title-section": { "displayName": "Section Title", "purpose": "Reading-section headings in the left column." },
+      "title-plate": { "displayName": "Plate Title", "purpose": "Figure caption titles; 1.9rem on the lead plate R.1, 1.6rem below 560px." },
+      "title-item": { "displayName": "Item Title", "purpose": "Route-step headings and the Contenido heading." },
+      "lead": { "displayName": "Lead", "purpose": "The single opening paragraph, max 62ch." },
+      "body": { "displayName": "Body", "purpose": "Reading text, 16px below 560px, max 62–64ch, lining numerals." },
+      "meta": { "displayName": "Meta", "purpose": "Descriptions, credit, captions, fact lists; Slate Ink." },
+      "label": { "displayName": "Figure Label", "purpose": "Figura R.n, Tabla R.n, TOC numbers, route steps, level numbers; font-variant-caps: small-caps, Figure Blue, normal case." },
+      "label-runhead": { "displayName": "Running-Head Label", "purpose": "Current-resource label in the resource running head only; font-variant-caps: all-small-caps." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-out-expo", "value": "cubic-bezier(.16,1,.3,1)", "purpose": "Arrow slide on the «Abrir» link (0.35s) and the R.3 language face swap (0.45s, 8px slide)." },
+      { "name": "cell-fill", "value": "fill .25s ease-out, stroke .25s ease-out; 60ms stagger per cell", "purpose": "R.2 bus cells filling in the real 20 vs 14 cycle schedule." },
+      { "name": "token-travel", "value": "2600ms, ease-out cubic (1-(1-p)^3), reset after 900ms", "purpose": "R.1 token PC → MAR → Memoria → MBR → IR → UC, changing 0 → LOAD after the address leg." },
+      { "name": "trigger", "value": "IntersectionObserver threshold 0.5 (once), then mouseenter / focusin", "purpose": "Every figure runs its mechanism on entering view and again on hover/focus." },
+      { "name": "reduced-motion", "value": "prefers-reduced-motion: reduce → transitions none, figures shown in finished state", "purpose": "Static diagrams for users who reduce motion." }
+    ],
+    "breakpoints": [
+      { "name": "stack", "value": "980px" },
+      { "name": "phone", "value": "560px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Figure Plate",
+      "kind": "card",
+      "refersTo": "plate",
+      "description": "The resource unit: hairline-framed white plate with live diagram art and a caption with figure label, title, description and «Abrir» link.",
+      "html": "<figure class=\"ds-plate\"><div class=\"ds-art\"><svg viewBox=\"0 0 300 90\" role=\"img\" aria-label=\"PC a MAR\"><rect x=\"2\" y=\"20\" width=\"90\" height=\"44\" rx=\"4\" fill=\"#fff\" stroke=\"#16223d\" stroke-width=\"1.6\"/><text x=\"14\" y=\"48\" font-family=\"Source Sans 3, sans-serif\" font-weight=\"600\" font-size=\"15\" fill=\"#16223d\">PC</text><path d=\"M92 42 H180\" stroke=\"#2350c8\" stroke-width=\"2\"/><rect x=\"180\" y=\"20\" width=\"90\" height=\"44\" rx=\"4\" fill=\"#e3eafb\" stroke=\"#2350c8\" stroke-width=\"1.6\"/><text x=\"192\" y=\"48\" font-family=\"Source Sans 3, sans-serif\" font-weight=\"600\" font-size=\"15\" fill=\"#16223d\">UC</text><rect class=\"ds-tok\" x=\"114\" y=\"31\" width=\"44\" height=\"22\" rx=\"11\" fill=\"#a8470a\"/></svg></div><figcaption class=\"ds-cap\"><span class=\"ds-fignum\">Figura R.1</span><h3 class=\"ds-ptitle\">CPU Quest: Misión Unidad de Control</h3><p class=\"ds-pdesc\">Un videojuego en el que tú tomas las decisiones de la Unidad de Control.</p><a class=\"ds-open\" href=\"#\"><span>Abrir CPU Quest</span><svg viewBox=\"0 0 18 18\" aria-hidden=\"true\"><path d=\"M2 9h13M10 4l5 5-5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg></a></figcaption></figure>",
+      "css": ".ds-plate{margin:0;max-width:420px;background:#fff;border:1px solid #c3cbda;display:flex;flex-direction:column;color:#16223d;font:400 17px/1.6 'Source Sans 3','Segoe UI',system-ui,sans-serif}.ds-art{padding:24px 24px 8px;border-bottom:1px solid #c3cbda}.ds-art svg{display:block;width:100%;height:auto}.ds-tok{transition:transform .6s cubic-bezier(.16,1,.3,1)}.ds-plate:hover .ds-tok,.ds-plate:focus-within .ds-tok{transform:translateX(40px)}.ds-cap{padding:18px 24px 22px;display:flex;flex-direction:column;gap:10px}.ds-fignum{font:600 17px/1.3 'Source Serif 4',Georgia,serif;color:#2350c8;font-variant-caps:small-caps;letter-spacing:.02em}.ds-ptitle{margin:0;font:600 1.5rem/1.2 'Source Serif 4',Georgia,serif}.ds-pdesc{margin:0;max-width:62ch}.ds-open{display:inline-flex;align-items:center;gap:8px;font-weight:600;color:#2350c8;text-decoration:none;align-self:flex-start}.ds-open svg{width:18px;height:18px;transition:transform .35s cubic-bezier(.16,1,.3,1)}.ds-open:hover svg,.ds-open:focus-visible svg{transform:translateX(4px)}.ds-open:hover span{text-decoration:underline;text-underline-offset:3px}.ds-open:focus-visible{outline:2px solid #2350c8;outline-offset:3px;border-radius:2px}"
+    },
+    {
+      "name": "«Abrir» Link",
+      "kind": "button",
+      "refersTo": "link-open",
+      "description": "Primary action: Figure Blue 600 label with a trailing stroked arrow that slides on hover/focus.",
+      "html": "<a class=\"ds-open\" href=\"#\"><span>Abrir el glosario</span><svg viewBox=\"0 0 18 18\" aria-hidden=\"true\"><path d=\"M2 9h13M10 4l5 5-5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg></a>",
+      "css": ".ds-open{display:inline-flex;align-items:center;gap:8px;font:600 17px/1.6 'Source Sans 3','Segoe UI',system-ui,sans-serif;color:#2350c8;text-decoration:none}.ds-open svg{width:18px;height:18px;transition:transform .35s cubic-bezier(.16,1,.3,1)}.ds-open:hover svg,.ds-open:focus-visible svg{transform:translateX(4px)}.ds-open:hover span{text-decoration:underline;text-underline-offset:3px}.ds-open:focus-visible{outline:2px solid #2350c8;outline-offset:3px;border-radius:2px}"
+    },
+    {
+      "name": "Contenido (TOC)",
+      "kind": "nav",
+      "refersTo": "toc-row",
+      "description": "Table of contents: 2px ink rule, numbered resource rows with serif small-caps numbers, «Último abierto» amber flag, then an unnumbered in-page list under a 2px rule.",
+      "html": "<nav class=\"ds-toc\"><h2>Contenido</h2><ol><li><span class=\"ds-n\">R.1</span><span><a href=\"#\">CPU Quest: Misión Unidad de Control</a><span class=\"ds-last\">Último abierto</span><span class=\"ds-d\">Juego de seis misiones</span></span></li><li><span class=\"ds-n\">R.2</span><span><a href=\"#\">Von Neumann en movimiento</a><span class=\"ds-d\">Animación ciclo a ciclo</span></span></li></ol><ul class=\"ds-sec\"><li><a href=\"#\">Ruta de estudio sugerida</a></li><li><a href=\"#\">Conceptos por recurso</a></li></ul></nav>",
+      "css": ".ds-toc{max-width:420px;border-top:2px solid #16223d;padding-top:14px;color:#16223d;font:400 17px/1.6 'Source Sans 3','Segoe UI',system-ui,sans-serif}.ds-toc h2{margin:0 0 8px;font:600 1.25rem/1.2 'Source Serif 4',Georgia,serif}.ds-toc ol,.ds-toc ul{list-style:none;margin:0;padding:0}.ds-toc ol li{display:grid;grid-template-columns:3.2em 1fr;gap:12px;padding:10px 0;border-bottom:1px solid #c3cbda}.ds-n{font:600 17px/1.4 'Source Serif 4',Georgia,serif;color:#2350c8;font-variant-caps:small-caps;letter-spacing:.02em}.ds-toc a{color:#16223d;font-weight:600;text-decoration:none}.ds-toc a:hover{color:#2350c8;text-decoration:underline;text-underline-offset:3px}.ds-toc a:focus-visible{outline:2px solid #2350c8;outline-offset:3px;border-radius:2px}.ds-d{display:block;font-size:15px;color:#46526b}.ds-last{margin-left:8px;font-size:13px;font-weight:600;color:#a8470a}.ds-sec{margin-top:14px!important;border-top:2px solid #16223d}.ds-sec li{padding:9px 0;border-bottom:1px solid #c3cbda}.ds-sec a{font-weight:400}"
+    },
+    {
+      "name": "Resource Running Head",
+      "kind": "nav",
+      "refersTo": "running-head-resource",
+      "description": "Navy bar injected atop every resource page: back to the portal, current figure label in all-small-caps serif, links to the other resources.",
+      "html": "<nav class=\"ds-rh\" aria-label=\"Recursos del curso 03306\"><a class=\"ds-rh-home\" href=\"#\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M14 8H3M7 3.5 2.5 8 7 12.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\"/></svg>Recursos 03306</a><span class=\"ds-rh-here\">Figura R.1 · CPU Quest</span><span class=\"ds-rh-more\"><a href=\"#\">R.2 Von Neumann</a><a href=\"#\">R.3 Glosario</a></span></nav>",
+      "css": ".ds-rh{display:flex;align-items:center;gap:6px 20px;flex-wrap:wrap;min-height:40px;padding:6px 16px;background:#16223d;color:#dfe5f1;font:400 15px/1.3 'Source Sans 3','Segoe UI',system-ui,sans-serif;border-bottom:1px solid #34405e}.ds-rh a{color:#fff;text-decoration:none;font-weight:600}.ds-rh a:hover{text-decoration:underline;text-underline-offset:3px}.ds-rh a:focus-visible{outline:2px solid #b9cbff;outline-offset:2px}.ds-rh-home{display:inline-flex;align-items:center;gap:6px}.ds-rh-home svg{width:16px;height:16px;flex:none}.ds-rh-here{color:#c9d3ea;font:600 16px/1.3 'Source Serif 4',Georgia,serif;font-variant-caps:all-small-caps;letter-spacing:.05em}.ds-rh-more{margin-left:auto;display:flex;gap:16px;flex-wrap:wrap}"
+    },
+    {
+      "name": "Coverage Table",
+      "kind": "custom",
+      "refersTo": "figure-label",
+      "description": "Textbook table: 2px ink header rule, hairline rows, filled/outlined Figure Blue squares, caption below with «Tabla R.n» label.",
+      "html": "<table class=\"ds-tbl\"><caption><b>Tabla R.1</b> Cobertura de conceptos.</caption><thead><tr><th>Concepto</th><th class=\"c\">R.1</th><th class=\"c\">R.2</th></tr></thead><tbody><tr><th>Ciclo de búsqueda (FETCH)</th><td class=\"c\"><span class=\"ds-mark\"></span></td><td class=\"c\"><span class=\"ds-mark part\"></span></td></tr><tr><th>Von Neumann frente a Harvard</th><td class=\"c ds-none\">—</td><td class=\"c\"><span class=\"ds-mark\"></span></td></tr></tbody></table>",
+      "css": ".ds-tbl{border-collapse:collapse;width:100%;max-width:520px;color:#16223d;font:400 16px/1.6 'Source Sans 3','Segoe UI',system-ui,sans-serif}.ds-tbl caption{caption-side:bottom;text-align:left;padding-top:12px;font-size:15px;color:#46526b}.ds-tbl caption b{font:600 17px 'Source Serif 4',Georgia,serif;color:#2350c8;font-variant-caps:small-caps;letter-spacing:.02em}.ds-tbl th,.ds-tbl td{padding:11px 12px;border-bottom:1px solid #c3cbda;text-align:left}.ds-tbl thead th{border-bottom:2px solid #16223d;font-weight:600;font-size:15px}.ds-tbl tbody th{font-weight:400}.ds-tbl .c{text-align:center;width:13%}.ds-mark{display:inline-block;width:12px;height:12px;background:#2350c8}.ds-mark.part{background:transparent;border:2px solid #2350c8;box-sizing:border-box}.ds-none{color:#46526b}.ds-tbl tbody tr:hover th{color:#2350c8}"
+    },
+    {
+      "name": "Footer Band",
+      "kind": "custom",
+      "refersTo": "footer",
+      "description": "Navy closing band with serif course title, credit and resource links over on-ink dividers.",
+      "html": "<footer class=\"ds-foot\"><h2>Arquitectura de Computadores · 03306</h2><p>Creado por <b>Ing. Heiner Guido Cambronero, Lic.</b></p><ul><li><a href=\"#\">R.1 CPU Quest</a></li><li><a href=\"#\">R.2 Von Neumann en movimiento</a></li></ul></footer>",
+      "css": ".ds-foot{background:#16223d;color:#dfe5f1;padding:48px 32px;font:400 17px/1.6 'Source Sans 3','Segoe UI',system-ui,sans-serif}.ds-foot h2{margin:0;color:#fff;font:600 1.6rem/1.2 'Source Serif 4',Georgia,serif}.ds-foot p{margin:10px 0 16px}.ds-foot ul{list-style:none;margin:0;padding:0;max-width:360px}.ds-foot li{padding:8px 0;border-bottom:1px solid #34405e}.ds-foot a{color:#b9cbff;text-decoration-thickness:1px;text-underline-offset:3px}.ds-foot a:hover{text-decoration-thickness:2px}.ds-foot a:focus-visible{outline:2px solid #b9cbff;outline-offset:3px;border-radius:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Textbook Figure Plate",
+    "overview": "The portal is a chapter of the course textbook, Capítulo R. Each resource appears as a numbered figure (Figura R.1 to R.3): a white plate with a hairline frame, a working SVG diagram of the concept the resource teaches, and a caption below with the title, a description, and an «Abrir» link. The page reads like printed matter: a running head at the top, a large serif chapter letter, a table of contents, numbered figures, a captioned table, and a dark closing band.\n\nDensity is moderate and editorial. The type pairing is a serif for chapter heads and figure labels (Source Serif 4) with a sans for reading text (Source Sans 3), both self-hosted from `assets/fonts/` under the OFL. Colour stays cool and quiet: navy ink on a pale blue-grey page, one figure blue for structure, and a single amber for the datum that moves. Depth comes from paper against plate and from rules, never from shadows or gradients.\n\nThe motion is the mechanism itself. Each diagram runs its process once when it scrolls into view and again on hover or focus. With reduced motion it stays static in its finished state.",
+    "keyCharacteristics": [
+      "Resources are numbered figure plates, not link cards.",
+      "Hairline 1px rules separate items. A 2px ink rule opens a section or list.",
+      "Two inks inside figures: blue for structure, amber for the moving datum.",
+      "Serif small-caps labels for figure, table, TOC, route and level numbers.",
+      "Chapter identity lives in the running head, never in a kicker above the title.",
+      "Diagrams demonstrate their mechanism once on entering view and on hover/focus."
+    ],
+    "rules": [
+      { "name": "The Two Inks Rule", "body": "Inside figures, Figure Blue draws structure and Navy Ink draws components. Data Amber marks only the datum that moves or the place the student last was. Never use amber for decoration or emphasis.", "section": "colors" },
+      { "name": "The No Gradient Rule", "body": "All surfaces are flat fills. No gradients, glows or tinted overlays.", "section": "colors" },
+      { "name": "The Small-Caps Label Rule", "body": "Every numbered label is the serif label style in small caps. Use all-small-caps only for the running-head label inside resources.", "section": "typography" },
+      { "name": "The No Kicker Rule", "body": "Never put an eyebrow or kicker above a heading. Chapter identity («Capítulo R · Recursos interactivos») belongs in the running head.", "section": "typography" },
+      { "name": "The Numbered Figure Rule", "body": "Only resources get numbers (R.1–R.n). In-page sections are listed without numbers under a 2px ink rule. A future resource becomes R.4 with its own plate, TOC row, table column and running-head link.", "section": "layout" },
+      { "name": "The Hairline and Heavy Rule", "body": "A 1px Hairline separates things of equal rank: plates, list rows, table rows. A 2px Navy Ink rule opens a group: Contenido, the in-page list, each reading section, and the table header.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do present every resource as a numbered figure plate with a working diagram of its concept, a «Figura R.n» label and a caption.",
+      "Do set every numbered label in Source Serif 4 600 17px with `font-variant-caps: small-caps` in Figure Blue.",
+      "Do separate peers with a 1px Hairline (#c3cbda) and open groups with a 2px Navy Ink rule.",
+      "Do reserve Data Amber (#a8470a) for the datum in motion and the «Último abierto» flag.",
+      "Do make each diagram run its mechanism once on entering view and again on hover/focus, and render it static with reduced motion.",
+      "Do keep chapter identity in the running head and add the same running-head bar to any new resource page."
+    ],
+    "donts": [
+      "Don't add a kicker or eyebrow above the title or any heading.",
+      "Don't give plates shadows, radius or gradients. Depth is paper, plate and rule.",
+      "Don't number in-page sections. Numbers belong to resources only.",
+      "Don't lay the plates out as an equal three-column card row. The lead plate spans 7 of 12 columns across two rows.",
+      "Don't use all-small-caps outside the resource running-head label.",
+      "Don't restyle the resources' internals to match the portal. Only the running head is shared."
+    ]
+  }
+}

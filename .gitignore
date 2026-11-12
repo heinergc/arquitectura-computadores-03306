@@ -1,0 +1,8 @@
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/build/
+.impeccable/config.local.json
+.claude/
+Thumbs.db
+Soluci*n*.txt
+.impeccable/hook.cache.json

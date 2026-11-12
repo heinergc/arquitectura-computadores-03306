@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<style id="rh03306-css">@font-face{font-family:"RH Sans";src:url(../assets/fonts/source-sans-3.woff2) format("woff2");font-weight:200 900;font-display:swap}@font-face{font-family:"RH Serif";src:url(../assets/fonts/source-serif-4.woff2) format("woff2");font-weight:200 900;font-display:swap}.rh03306{display:flex;align-items:center;gap:6px 20px;flex-wrap:wrap;min-height:40px;padding:6px 16px;margin:0;background:#16223d;color:#dfe5f1;font:400 15px/1.3 "RH Sans","Segoe UI",system-ui,-apple-system,sans-serif;box-sizing:border-box;position:relative;z-index:100;border-bottom:1px solid #34405e}.rh03306 a{color:#fff;text-decoration:none;font-weight:600}.rh03306 a:hover{text-decoration:underline;text-underline-offset:3px}.rh03306 a:focus-visible{outline:2px solid #b9cbff;outline-offset:2px}.rh03306 .rh-home{display:inline-flex;align-items:center;gap:6px}.rh03306 .rh-home svg{width:16px;height:16px;flex:none}.rh03306 .rh-here{color:#c9d3ea;font:600 16px/1.3 "RH Serif",Georgia,serif;font-variant-caps:all-small-caps;letter-spacing:.05em}.rh03306 .rh-more{margin-left:auto;display:flex;gap:16px;flex-wrap:wrap}@media(max-width:560px){.rh03306 .rh-here{display:none}}@media print{.rh03306{display:none}}</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Von Neumann en movimiento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: controles arriba; diagrama de la CPU a la izquierda y panel de estado a la derecha; línea de tiempo del bus y conclusión abajo. Mundo visual único, oscuro. */
+:root{
+  color-scheme: dark;
+  --bg:#0d1117; --panel:#141b24; --panel2:#1a2330; --line:#2b3749; --ink:#e7edf5; --muted:#8f9bad;
+  --instr:#4aa3ff; --data:#ffb547; --addr:#5fd38d; --hot:#ffffff; --stop:#ff6b6b; --ctrl:#c792ea;
+  --mono:'IBM Plex Mono',ui-monospace,Consolas,'Courier New',monospace;
+  --sans:'IBM Plex Sans',system-ui,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:400 15px/1.5 var(--sans)}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:16px}
+h1{font:600 28px/1.15 var(--sans);margin:0;text-wrap:balance}
+h2{font:600 17px/1.3 var(--sans);margin:0 0 6px;text-wrap:balance}
+h3{font:600 12px/1.3 var(--sans);margin:0 0 8px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+p{margin:0}
+.lead{color:var(--muted);margin-top:6px;max-width:70ch}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+
+.controls{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:center}
+button{font:500 14px var(--sans);color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--muted)}
+button.primary{background:var(--instr);color:#04121f;border-color:var(--instr);font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--instr);outline-offset:2px}
+.seg{position:relative;display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{padding:8px 14px;cursor:pointer;background:var(--panel2);font-weight:500}
+.seg input:checked+label{background:var(--ink);color:#0d1117}
+.seg input:focus-visible+label{outline:2px solid var(--instr);outline-offset:-2px}
+.speed{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.speed output{font-family:var(--mono);color:var(--ink);min-width:3ch}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.scroll{overflow-x:auto}
+svg#svg{display:block;width:100%;height:auto;min-width:760px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;color:var(--muted);font-size:13px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;background:var(--c)}
+
+.side{display:flex;flex-direction:column;gap:16px}
+.now-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.badge{font:600 11px var(--mono);letter-spacing:.06em;padding:4px 9px;border-radius:999px}
+.ph-idle{background:var(--panel2);color:var(--muted)}
+.ph-fetch{background:var(--instr);color:#04121f}
+.ph-decode{background:var(--ctrl);color:#1a0b24}
+.ph-exec{background:var(--data);color:#2a1700}
+.ph-end{background:var(--addr);color:#062012}
+.cyc{font:400 12px var(--mono);color:var(--muted)}
+#now-say{color:var(--ink);font-size:14px;min-height:6.5em}
+#prog{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+#prog li{display:grid;grid-template-columns:2.2ch 10ch 1fr;gap:10px;align-items:baseline;padding:5px 8px;border-left:3px solid transparent;border-radius:4px;font-size:13px}
+#prog .pa{font-family:var(--mono);color:var(--muted)}
+#prog code{font:600 13px var(--mono);color:var(--instr)}
+#prog .pn{color:var(--muted);font-size:12px}
+#prog li.cur{background:rgba(255,255,255,.09);border-left-color:var(--hot)}
+#prog li.nxt{border-left:3px dashed var(--instr)}
+.data-note{margin-top:8px;font-size:12px;color:var(--muted)}
+.data-note code{font-family:var(--mono);color:var(--data)}
+#log{list-style:none;margin:0;padding:0;max-height:170px;overflow:auto;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+#log li{display:grid;grid-template-columns:3ch 7.5ch 1fr;gap:8px;color:var(--muted)}
+#log li b{font-family:var(--mono);color:var(--ink)}
+#log .lg-ph{font:600 10px var(--mono);letter-spacing:.04em}
+#log .empty{display:block;color:var(--muted)}
+
+/* línea de tiempo */
+.tl-grid{display:grid;grid-template-columns:150px repeat(var(--cols),minmax(26px,1fr));gap:3px;min-width:720px;align-items:center}
+.tl-lab{font-size:13px;color:var(--muted)}
+.tl-num{font:400 10px var(--mono);color:var(--muted);text-align:center}
+.tl-num.cur{color:var(--hot);font-weight:600}
+.tl-cell{height:28px;border:1px solid var(--line);border-radius:4px;display:grid;place-items:center;font:600 11px var(--mono)}
+.tl-cell.i{background:var(--instr);border-color:var(--instr);color:#04121f}
+.tl-cell.d{background:var(--data);border-color:var(--data);color:#2a1700}
+.tl-cell.sim{outline:2px solid var(--hot);outline-offset:1px}
+.tl-cell.save{border-style:dashed;background:repeating-linear-gradient(135deg,transparent 0 5px,rgba(143,155,173,.18) 5px 7px)}
+#tl-cap{margin-top:10px;color:var(--muted);font-size:14px;max-width:80ch}
+.tl-total{margin-top:6px;font:600 13px var(--mono);color:var(--ink)}
+
+.idea{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.idea h2{margin-bottom:4px}
+.idea p{color:var(--muted);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{font:600 13px var(--mono);padding:6px 12px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)}
+.chip em{font-style:normal;color:var(--instr)}
+.chip.h em{color:var(--data)}
+
+/* diagrama */
+svg text{font-family:var(--mono)}
+.frame{fill:none;stroke:var(--line);stroke-width:1.5}
+.ttl{font:600 13px var(--mono);fill:var(--muted);letter-spacing:.12em}
+.link{fill:none;stroke:var(--line);stroke-width:2;stroke-dasharray:3 5}
+.box rect{fill:var(--panel2);stroke:var(--line);stroke-width:1.5;transition:stroke .15s,fill .15s}
+.box.on rect{stroke:var(--hot);fill:#243247}
+.blabel{font:600 12px var(--mono);fill:var(--ink)}
+.bhint{font:400 9.5px var(--sans);fill:var(--muted)}
+.bval{font:600 16px var(--mono);fill:var(--ink)}
+.bval.sm{font-size:12px}
+.mem-frame{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+.cell rect{fill:transparent;stroke:var(--line);stroke-width:1}
+.cell.k-i rect{fill:rgba(74,163,255,.12);stroke:rgba(74,163,255,.55)}
+.cell.k-d rect{fill:rgba(255,181,71,.12);stroke:rgba(255,181,71,.55)}
+.cell.k-free rect{stroke-dasharray:3 3}
+.cell.sel rect{stroke:var(--hot);stroke-width:2.5;fill:rgba(255,255,255,.16)}
+.maddr{font:400 11px var(--mono);fill:var(--muted)}
+.mval{font:600 13px var(--mono);fill:var(--ink)}
+.mtag{font:400 10px var(--sans);fill:var(--muted)}
+.conn{stroke:var(--line);stroke-width:3;fill:none}
+.bus{fill:var(--panel2);stroke:var(--line);stroke-width:1.5}
+.bus.busy{fill:var(--bc,var(--instr));stroke:var(--bc,var(--instr));filter:drop-shadow(0 0 8px var(--bc,var(--instr)))}
+.buslbl{font:600 9.5px var(--mono);fill:var(--muted);letter-spacing:.08em;pointer-events:none}
+.bus.busy+.buslbl{fill:#08101a}
+.busst{font:600 11px var(--mono);fill:var(--muted)}
+.busst.busy{fill:var(--stop)}
+.busst2{font:400 10px var(--sans);fill:var(--muted)}
+.pkt rect{stroke:rgba(0,0,0,.4);stroke-width:1}
+.pkt text{font:600 11px var(--mono);fill:#08101a}
+.pkt.k-i rect{fill:var(--instr)}
+.pkt.k-d rect{fill:var(--data)}
+.pkt.k-a rect{fill:var(--addr)}
+.pkt{filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+.flash{animation:pop .8s ease-out}
+@keyframes pop{0%{fill:#ffe08a}100%{fill:var(--ink)}}
+@media (prefers-reduced-motion:reduce){.flash{animation:none}}
+
+@media (max-width:960px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .idea{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+<nav class="rh03306" aria-label="Recursos del curso 03306"><a class="rh-home" href="../index.html"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8H3M7 3.5 2.5 8 7 12.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Recursos 03306</a><span class="rh-here">Figura R.2 · Von Neumann en movimiento</span><span class="rh-more"><a href="cpu-quest.html">R.1 CPU Quest</a><a href="glosario.html">R.3 Glosario</a></span></nav>
+<div class="wrap">
+  <header>
+    <h1>Von Neumann en movimiento</h1>
+    <p class="lead">Una CPU repite tres pasos: busca una instrucción (fetch), la decodifica y la ejecuta. Aquí ves cada ciclo de reloj de un programa que suma 5 + 3, y qué pasa con el bus que comparte con la memoria.</p>
+  </header>
+
+  <div class="controls">
+    <div class="seg" role="radiogroup" aria-label="Arquitectura">
+      <input type="radio" name="arch" id="arch-vn" value="vn" checked><label for="arch-vn">Von Neumann</label>
+      <input type="radio" name="arch" id="arch-h" value="h"><label for="arch-h">Harvard</label>
+    </div>
+    <button id="btn-play" class="primary" type="button">Reproducir</button>
+    <button id="btn-step" type="button">Siguiente ciclo</button>
+    <button id="btn-reset" type="button">Reiniciar</button>
+    <div class="speed"><label for="speed">Velocidad</label><input type="range" id="speed" min="0.5" max="4" step="0.5" value="1"><output id="speed-out" for="speed">1×</output></div>
+  </div>
+
+  <main class="grid">
+    <section class="card" aria-label="Diagrama de la CPU y la memoria">
+      <div class="scroll"><svg id="svg" viewBox="0 0 1000 580" role="img" aria-label="Diagrama animado de una CPU conectada a la memoria mediante buses"></svg></div>
+      <div class="legend">
+        <span style="--c:var(--instr)">instrucción</span>
+        <span style="--c:var(--data)">dato</span>
+        <span style="--c:var(--addr)">dirección</span>
+        <span style="--c:#fff">celda o registro activo</span>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card" aria-live="polite">
+        <div class="now-head"><span id="badge" class="badge ph-idle">LISTO</span><span id="cyc" class="cyc">Ciclo 0</span></div>
+        <h2 id="now-title"></h2>
+        <p id="now-say"></p>
+      </div>
+      <div class="card">
+        <h3>Programa en memoria</h3>
+        <ol id="prog"></ol>
+        <p class="data-note">Datos iniciales: <code>[10] = 5</code>, <code>[11] = 3</code>, <code>[12] = 0</code></p>
+      </div>
+      <div class="card">
+        <h3>Historial de ciclos</h3>
+        <ol id="log"></ol>
+      </div>
+    </aside>
+  </main>
+
+  <section class="card" aria-label="Uso del bus">
+    <h2>Quién usa el bus en cada ciclo</h2>
+    <div class="scroll"><div id="tl"></div></div>
+    <p id="tl-cap"></p>
+    <p class="tl-total" id="tl-total"></p>
+  </section>
+
+  <section class="card idea" aria-label="Conclusión">
+    <div>
+      <h2>Von Neumann: una memoria, un bus</h2>
+      <p>El programa y los datos viven en la misma memoria y viajan por el mismo camino. Cada acceso a memoria ocupa el bus entero, así que traer la siguiente instrucción y leer un dato nunca pueden ocurrir a la vez. Esa espera es el cuello de botella de Von Neumann.</p>
+    </div>
+    <div>
+      <h2>Harvard: dos memorias, dos buses</h2>
+      <p>Las instrucciones y los datos tienen cada uno su memoria y su bus. Mientras la CPU lee o escribe un dato, ya está trayendo la siguiente instrucción. Cambia a Harvard arriba y compara las columnas del bus.</p>
+    </div>
+    <div>
+      <h2>Las CPU actuales mezclan ambas</h2>
+      <p>Para el programador hay una sola RAM (Von Neumann), pero por dentro la caché L1 se divide en instrucciones y datos, con caminos separados (Harvard modificada).</p>
+      <div class="chips"><span class="chip">Von Neumann <em id="n-vn"></em> ciclos</span><span class="chip h">Harvard <em id="n-h"></em> ciclos</span></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const NS = 'http://www.w3.org/2000/svg';
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  /* ---------- Programa ---------- */
+  const PROG = [
+    { op: 'LOAD',  arg: 10,   text: 'LOAD 10',  note: 'ACC ← Mem[10]' },
+    { op: 'ADD',   arg: 11,   text: 'ADD 11',   note: 'ACC ← ACC + Mem[11]' },
+    { op: 'STORE', arg: 12,   text: 'STORE 12', note: 'Mem[12] ← ACC' },
+    { op: 'HALT',  arg: null, text: 'HALT',     note: 'detener la CPU' }
+  ];
+  const MEAN = {
+    LOAD: 'copiar un dato de la memoria al acumulador',
+    ADD: 'sumar al acumulador un dato de la memoria',
+    STORE: 'guardar el acumulador en la memoria',
+    HALT: 'detener la CPU'
+  };
+  const INIT_MEM = { 0: 'LOAD 10', 1: 'ADD 11', 2: 'STORE 12', 3: 'HALT', 10: 5, 11: 3, 12: 0 };
+
+  /* ---------- Rutas de los paquetes (coordenadas del SVG) ---------- */
+  const PATHS = {
+    IR_UC:   [[330,201],[111,201],[111,160]],
+    IR_MAR:  [[400,232],[400,300]],
+    ACC_MDR: [[96,456],[96,494],[400,494],[400,452]],
+    MDR_ALU: [[330,418],[310,418]],
+    ALU_ACC: [[180,432],[156,432]],
+    ACC_ALU: [[156,404],[180,404]],
+    PC_MAR:  [[470,111],[482,111],[482,331],[470,331]],
+    MDR_IR:  [[470,421],[492,421],[492,201],[470,201]],
+    v_addr:  [[470,331],[545,331],[545,300],[640,300]],
+    v_din:   [[640,300],[545,300],[545,421],[470,421]],
+    v_dout:  [[470,421],[545,421],[545,300],[640,300]],
+    i_addr:  [[470,111],[545,111],[545,150],[640,150]],
+    i_din:   [[640,150],[545,150],[545,201],[470,201]],
+    d_addr:  [[470,331],[545,331],[545,373],[640,373]],
+    d_din:   [[640,373],[545,373],[545,421],[470,421]],
+    d_dout:  [[470,421],[545,421],[545,373],[640,373]]
+  };
+
+  /* ---------- Cronograma de ciclos ---------- */
+  function build(m) {
+    const vn = m === 'vn';
+
+    const vnF1 = n => ({
+      phase: 'FETCH', title: 'Copiar la dirección al MAR', instr: n,
+      say: () => 'El PC apunta a la instrucción ' + S.PC + '. Su valor se copia al MAR, el registro que le dice a la memoria qué dirección usar.',
+      actions: [{ moves: [{ path: 'PC_MAR', label: () => String(S.PC), kind: 'a', hl: ['PC', 'MAR'], apply: () => { S.MAR = S.PC; } }] }]
+    });
+    const vnF2 = n => ({
+      phase: 'FETCH', title: 'Leer la instrucción por el bus', instr: n,
+      say: 'La dirección sale por el bus único y la memoria devuelve la instrucción hacia MDR e IR. En este ciclo el bus está OCUPADO: ningún dato puede usarlo. El PC avanza a la siguiente dirección.',
+      actions: [{ bus: 'V', kind: 'i', moves: [
+        { path: 'v_addr', label: () => '@' + S.MAR, kind: 'a', hl: ['MAR'], cell: () => S.MAR },
+        { path: 'v_din', label: () => String(S.mem[S.MAR]), kind: 'i', hl: ['MDR'], apply: () => { S.MDR = S.mem[S.MAR]; } },
+        { path: 'MDR_IR', label: () => String(S.MDR), kind: 'i', hl: ['MDR', 'IR'], apply: () => { S.IR = S.MDR; S.PC += 1; } }
+      ] }]
+    });
+    const hF1 = n => ({
+      phase: 'FETCH', title: 'Dirección por el bus de instrucciones', instr: n,
+      say: () => 'La dirección ' + S.PC + ' sale del PC por el bus de instrucciones hacia la memoria de programa.',
+      actions: [{ bus: 'I', kind: 'i', moves: [
+        { path: 'i_addr', label: () => '@' + S.PC, kind: 'a', hl: ['PC'], cell: () => S.PC, apply: () => { S.fetchAddr = S.PC; } }
+      ] }]
+    });
+    const hF2 = n => ({
+      phase: 'FETCH', title: 'Instrucción directa a IR', instr: n,
+      say: 'La instrucción vuelve por el bus de instrucciones directamente a IR y el PC avanza. Este bus no se usa para datos, así que no compite con nadie.',
+      actions: [{ bus: 'I', kind: 'i', moves: [
+        { path: 'i_din', label: () => String(S.mem[S.fetchAddr]), kind: 'i', hl: ['IR'], cellStart: () => S.fetchAddr,
+          apply: () => { S.IR = S.mem[S.fetchAddr]; S.PC += 1; } }
+      ] }]
+    });
+    const dec = n => ({
+      phase: 'DECODE', title: 'Decodificar ' + PROG[n].op, instr: n,
+      say: () => 'La unidad de control lee IR (' + S.IR + ') y determina qué hacer: ' + MEAN[PROG[n].op] + '.',
+      actions: [{ moves: [{ path: 'IR_UC', label: () => String(S.IR), kind: 'i', hl: ['IR', 'UC'], apply: () => { S.uc = 'Decodifica: ' + PROG[n].op; } }] }]
+    });
+    const x1 = n => {
+      const I = PROG[n];
+      const acts = [{ moves: [{ path: 'IR_MAR', label: () => '@' + I.arg, kind: 'a', hl: ['IR', 'MAR'], apply: () => { S.MAR = I.arg; } }] }];
+      if (I.op === 'STORE') {
+        acts.push({ moves: [{ path: 'ACC_MDR', label: () => String(S.ACC), kind: 'd', hl: ['ACC', 'MDR'], apply: () => { S.MDR = S.ACC; } }] });
+      }
+      return {
+        phase: 'EXECUTE', title: 'Preparar el acceso a datos', instr: n, actions: acts,
+        say: I.op === 'STORE'
+          ? 'El operando (' + I.arg + ') va al MAR como dirección de destino, y el acumulador se copia al MDR para poder escribirlo.'
+          : 'El operando de la instrucción (' + I.arg + ') se copia al MAR: es la dirección del dato que hay que leer.'
+      };
+    };
+    const x2 = n => {
+      const I = PROG[n];
+      const read = I.op !== 'STORE';
+      const lane = vn ? 'V' : 'D';
+      const A = vn ? 'v_addr' : 'd_addr', Din = vn ? 'v_din' : 'd_din', Dout = vn ? 'v_dout' : 'd_dout';
+      const moves = read
+        ? [{ path: A, label: () => '@' + S.MAR, kind: 'a', hl: ['MAR'], cell: () => S.MAR },
+           { path: Din, label: () => String(S.mem[S.MAR]), kind: 'd', hl: ['MDR'], apply: () => { S.MDR = S.mem[S.MAR]; } }]
+        : [{ path: A, label: () => '@' + S.MAR, kind: 'a', hl: ['MAR'], cell: () => S.MAR },
+           { path: Dout, label: () => String(S.MDR), kind: 'd', hl: ['MDR'], apply: () => { S.mem[S.MAR] = S.MDR; } }];
+      let say;
+      if (vn) {
+        say = read
+          ? 'Segundo uso del bus: ahora para traer el DATO. No pudo hacerse antes ni a la vez que el fetch, porque el bus es uno solo.'
+          : 'Segundo uso del bus: ahora para ESCRIBIR el dato en memoria. El bus vuelve a quedar ocupado y nada más puede pasar por él.';
+      } else {
+        say = read ? 'Se lee el dato por el bus de datos.' : 'Se escribe el dato por el bus de datos.';
+      }
+      return {
+        phase: 'EXECUTE', title: read ? 'Leer el dato por el bus' : 'Escribir el dato por el bus', instr: n, say,
+        actions: [{ bus: lane, kind: 'd', moves }]
+      };
+    };
+    const x3 = n => {
+      const I = PROG[n];
+      if (I.op === 'LOAD') {
+        return {
+          phase: 'EXECUTE', title: 'Guardar en el acumulador', instr: n,
+          say: () => 'El dato pasa por la ALU sin cambios y queda en el acumulador: ACC = ' + S.MDR + '.',
+          actions: [{ moves: [
+            { path: 'MDR_ALU', label: () => String(S.MDR), kind: 'd', hl: ['MDR', 'ALU'], apply: () => { S.alu = 'pasa ' + S.MDR; } },
+            { path: 'ALU_ACC', label: () => String(S.MDR), kind: 'd', hl: ['ALU', 'ACC'], apply: () => { S.ACC = S.MDR; } }
+          ] }]
+        };
+      }
+      return {
+        phase: 'EXECUTE', title: 'Sumar en la ALU', instr: n,
+        say: () => 'La ALU suma el acumulador y el dato: ' + S.ACC + ' + ' + S.MDR + ' = ' + (S.ACC + S.MDR) + '. El resultado vuelve al acumulador.',
+        actions: [{ moves: [
+          [ { path: 'ACC_ALU', label: () => String(S.ACC), kind: 'd', hl: ['ACC', 'ALU'] },
+            { path: 'MDR_ALU', label: () => String(S.MDR), kind: 'd', hl: ['MDR', 'ALU'], apply: () => { S.alu = S.ACC + ' + ' + S.MDR + ' = ' + (S.ACC + S.MDR); } } ],
+          { path: 'ALU_ACC', label: () => String(S.ACC + S.MDR), kind: 'd', hl: ['ALU', 'ACC'], apply: () => { S.ACC = S.ACC + S.MDR; } }
+        ] }]
+      };
+    };
+    const merge = (c, f, title, say) => {
+      c.actions = c.actions.concat(f.actions);
+      c.par = true; c.instr2 = f.instr; c.title = title; c.say = say; c.phase = 'EXECUTE + FETCH';
+      return c;
+    };
+
+    const cyc = [];
+    if (vn) {
+      PROG.forEach((I, n) => {
+        cyc.push(vnF1(n), vnF2(n), dec(n));
+        if (I.op === 'LOAD' || I.op === 'ADD') cyc.push(x1(n), x2(n), x3(n));
+        else if (I.op === 'STORE') cyc.push(x1(n), x2(n));
+      });
+    } else {
+      cyc.push(hF1(0), hF2(0));
+      PROG.forEach((I, n) => {
+        cyc.push(dec(n));
+        if (I.op === 'HALT') return;
+        const next = n < PROG.length - 1;
+        const store = I.op === 'STORE';
+        let c1 = x1(n), c2 = x2(n);
+        if (next) {
+          c1 = merge(c1, hF1(n + 1), 'Operando a MAR y dirección de la siguiente instrucción',
+            store ? 'En paralelo: el operando (' + I.arg + ') va a MAR, ACC se copia a MDR, y por el otro bus sale la dirección de la siguiente instrucción.'
+                  : 'En paralelo: el operando (' + I.arg + ') pasa a MAR para el acceso a datos y, por el bus de instrucciones, sale la dirección de la siguiente instrucción.');
+          c2 = merge(c2, hF2(n + 1), store ? 'Escribir el dato y recibir la siguiente instrucción' : 'Leer el dato y recibir la siguiente instrucción',
+            'Dos buses, dos accesos a memoria en el MISMO ciclo: ' + (store ? 'se escribe el dato en la memoria de datos' : 'se lee el dato de la memoria de datos') + ' y llega la siguiente instrucción. En Von Neumann esto costaría dos ciclos.');
+        }
+        cyc.push(c1, c2);
+        if (!store) cyc.push(x3(n));
+      });
+    }
+    return cyc;
+  }
+
+  const N = { vn: build('vn').length, h: build('h').length };
+
+  /* ---------- Estado ---------- */
+  let mode = 'vn', S, sched = [], idx = 0, token = 0, busyRun = false, playing = false, finished = false;
+  let speed = 1, hlCount = {}, selCells = new Set();
+
+  const freshState = () => ({ PC: 0, IR: null, MAR: null, MDR: null, ACC: 0, fetchAddr: null, uc: 'en espera', alu: '—', mem: Object.assign({}, INIT_MEM) });
+
+  /* ---------- Dibujo del diagrama ---------- */
+  const BOXES = [
+    { id: 'UC',  x: 36,  y: 80,  w: 260, h: 80, label: 'UNIDAD DE CONTROL', hint: 'decodifica y ordena', sm: 1 },
+    { id: 'PC',  x: 330, y: 80,  w: 140, h: 62, label: 'PC',  hint: 'próxima instrucción' },
+    { id: 'IR',  x: 330, y: 170, w: 140, h: 62, label: 'IR',  hint: 'instrucción actual' },
+    { id: 'MAR', x: 330, y: 300, w: 140, h: 62, label: 'MAR', hint: 'dirección de memoria' },
+    { id: 'MDR', x: 330, y: 390, w: 140, h: 62, label: 'MDR', hint: 'dato en tránsito' },
+    { id: 'ALU', x: 180, y: 380, w: 130, h: 76, label: 'ALU', hint: 'calcula', sm: 1 },
+    { id: 'ACC', x: 36,  y: 380, w: 120, h: 76, label: 'ACC', hint: 'acumulador' }
+  ];
+  const pts = k => PATHS[k].map(p => p.join(',')).join(' ');
+  const line = (x1, y1, x2, y2) => '<line class="conn" x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '"/>';
+
+  function memRows(addrs, y0) {
+    return addrs.map((a, i) => {
+      const y = y0 + 29 * i;
+      const kind = a <= 3 ? 'k-i' : (a >= 10 && a <= 12 ? 'k-d' : 'k-free');
+      const tag = kind === 'k-i' ? 'instrucción' : kind === 'k-d' ? 'dato' : 'libre';
+      return '<g id="cell-' + a + '" class="cell ' + kind + '"><rect x="650" y="' + y + '" width="320" height="26" rx="4"/>' +
+        '<text class="maddr" x="660" y="' + (y + 17) + '">' + String(a).padStart(2, '0') + '</text>' +
+        '<text class="mval" id="mem-' + a + '" x="700" y="' + (y + 17) + '"></text>' +
+        '<text class="mtag" x="960" y="' + (y + 17) + '" text-anchor="end">' + tag + '</text></g>';
+    }).join('');
+  }
+  function busBar(id, y, h, label, stY) {
+    return '<rect id="bus-' + id + '" class="bus" x="534" y="' + y + '" width="22" height="' + h + '" rx="6"/>' +
+      '<text class="buslbl" transform="translate(549,' + (y + h / 2) + ') rotate(-90)" text-anchor="middle">' + label + '</text>' +
+      '<text class="busst" id="st-' + id + '" x="545" y="' + stY + '" text-anchor="middle">LIBRE</text>' +
+      '<text class="busst2" id="st2-' + id + '" x="545" y="' + (stY + 13) + '" text-anchor="middle"></text>';
+  }
+
+  function buildSVG() {
+    let h = '<rect class="frame" x="20" y="30" width="480" height="530" rx="14"/><text class="ttl" x="36" y="54">CPU</text>';
+    const links = ['IR_UC', 'IR_MAR', 'ACC_MDR', 'MDR_ALU', 'ALU_ACC', 'ACC_ALU'];
+    if (mode === 'vn') links.push('PC_MAR', 'MDR_IR');
+    links.forEach(k => { h += '<polyline class="link" points="' + pts(k) + '"/>'; });
+    BOXES.forEach(b => {
+      h += '<g id="box-' + b.id + '" class="box"><rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' +
+        '<text class="blabel" x="' + (b.x + 10) + '" y="' + (b.y + 19) + '">' + b.label + '</text>' +
+        '<text class="bhint" x="' + (b.x + 10) + '" y="' + (b.y + 33) + '">' + b.hint + '</text>' +
+        '<text class="bval' + (b.sm ? ' sm' : '') + '" id="val-' + b.id + '" x="' + (b.x + b.w / 2) + '" y="' + (b.y + b.h - 10) + '" text-anchor="middle"></text></g>';
+    });
+    if (mode === 'vn') {
+      h += '<rect class="mem-frame" x="640" y="30" width="340" height="530" rx="12"/>' +
+        '<text class="ttl" x="656" y="52">MEMORIA ÚNICA</text>' +
+        '<text class="mtag" x="964" y="52" text-anchor="end">código y datos en el mismo lugar</text>' +
+        memRows(Array.from({ length: 16 }, (_, i) => i), 70);
+      h += line(470, 331, 534, 331) + line(470, 421, 534, 421) + line(556, 300, 640, 300);
+      h += busBar('V', 90, 350, 'BUS ÚNICO · dirección + datos + control', 462);
+    } else {
+      h += '<rect class="mem-frame" x="640" y="30" width="340" height="230" rx="12"/>' +
+        '<text class="ttl" x="656" y="52">MEMORIA DE PROGRAMA</text>' +
+        '<text class="mtag" x="964" y="52" text-anchor="end">solo instrucciones</text>' +
+        memRows([0, 1, 2, 3, 4, 5], 70);
+      h += '<rect class="mem-frame" x="640" y="300" width="340" height="230" rx="12"/>' +
+        '<text class="ttl" x="656" y="322">MEMORIA DE DATOS</text>' +
+        '<text class="mtag" x="964" y="322" text-anchor="end">solo datos</text>' +
+        memRows([10, 11, 12, 13, 14, 15], 340);
+      h += line(470, 111, 534, 111) + line(470, 201, 534, 201) + line(470, 331, 534, 331) + line(470, 421, 534, 421) +
+        line(556, 150, 640, 150) + line(556, 373, 640, 373);
+      h += busBar('I', 88, 130, 'BUS DE INSTRUCCIONES', 236) + busBar('D', 308, 130, 'BUS DE DATOS', 456);
+    }
+    h += '<g id="pkts"></g>';
+    $('svg').innerHTML = h;
+  }
+
+  /* ---------- Utilidades de interfaz ---------- */
+  function flash(el) {
+    el.classList.remove('flash');
+    el.getBoundingClientRect();
+    el.classList.add('flash');
+  }
+  function setT(id, v, quiet) {
+    const el = $(id); if (!el) return;
+    const t = String(v);
+    if (el.textContent !== t) { el.textContent = t; if (!quiet) flash(el); }
+  }
+  function cellAddrs() { return mode === 'vn' ? Array.from({ length: 16 }, (_, i) => i) : [0, 1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15]; }
+  function renderRegs(quiet) {
+    setT('val-PC', S.PC, quiet);
+    setT('val-IR', S.IR == null ? '—' : S.IR, quiet);
+    setT('val-MAR', S.MAR == null ? '—' : S.MAR, quiet);
+    setT('val-MDR', S.MDR == null ? '—' : S.MDR, quiet);
+    setT('val-ACC', S.ACC, quiet);
+    setT('val-UC', S.uc, quiet);
+    setT('val-ALU', S.alu, quiet);
+    cellAddrs().forEach(a => setT('mem-' + a, S.mem[a] == null ? '—' : S.mem[a], quiet));
+  }
+  function hlOn(ids) { ids.forEach(id => { hlCount[id] = (hlCount[id] || 0) + 1; $('box-' + id).classList.add('on'); }); }
+  function hlOff(ids) { ids.forEach(id => { hlCount[id] = Math.max(0, (hlCount[id] || 0) - 1); if (!hlCount[id]) $('box-' + id).classList.remove('on'); }); }
+  function selectCell(a) { const el = $('cell-' + a); if (el) { el.classList.add('sel'); selCells.add(a); } }
+  function clearCells() { selCells.forEach(a => { const el = $('cell-' + a); if (el) el.classList.remove('sel'); }); selCells.clear(); }
+  function setBus(lane, on, kind) {
+    const bar = $('bus-' + lane), st = $('st-' + lane), st2 = $('st2-' + lane);
+    if (!bar) return;
+    if (on) bar.style.setProperty('--bc', kind === 'i' ? 'var(--instr)' : 'var(--data)');
+    bar.classList.toggle('busy', on);
+    st.classList.toggle('busy', on);
+    st.textContent = on ? 'OCUPADO' : 'LIBRE';
+    st2.textContent = on ? (kind === 'i' ? 'instrucción' : 'dato') : '';
+  }
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function flyPacket(path, label, kind, my) {
+    return new Promise(res => {
+      const layer = $('pkts');
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('class', 'pkt k-' + kind);
+      const w = Math.max(28, String(label).length * 7.4 + 14);
+      g.innerHTML = '<rect x="' + (-w / 2) + '" y="-11" width="' + w + '" height="22" rx="11"/><text y="4" text-anchor="middle">' + esc(label) + '</text>';
+      layer.appendChild(g);
+      const segs = []; let total = 0;
+      for (let i = 1; i < path.length; i++) {
+        const dx = path[i][0] - path[i - 1][0], dy = path[i][1] - path[i - 1][1];
+        const len = Math.hypot(dx, dy); segs.push(len); total += len;
+      }
+      const dur = Math.max(380, total * 2.3) / speed;
+      const t0 = performance.now();
+      const place = t => {
+        let d = t * total, i = 0;
+        while (i < segs.length - 1 && d > segs[i]) { d -= segs[i]; i++; }
+        const f = segs[i] ? d / segs[i] : 1;
+        const a = path[i], b = path[i + 1];
+        g.setAttribute('transform', 'translate(' + (a[0] + (b[0] - a[0]) * f) + ',' + (a[1] + (b[1] - a[1]) * f) + ')');
+      };
+      place(0);
+      const frame = now => {
+        if (my !== token) { g.remove(); return res(); }
+        const t = Math.min(1, (now - t0) / dur);
+        place(t);
+        if (t < 1) requestAnimationFrame(frame); else { g.remove(); res(); }
+      };
+      requestAnimationFrame(frame);
+    });
+  }
+
+  async function runMove(m, my) {
+    hlOn(m.hl || []);
+    if (m.cellStart) selectCell(m.cellStart());
+    await flyPacket(PATHS[m.path], m.label(), m.kind, my);
+    if (my !== token) return;
+    if (m.apply) m.apply();
+    if (m.cell) selectCell(m.cell());
+    renderRegs();
+    hlOff(m.hl || []);
+  }
+  async function runAction(a, my) {
+    if (a.bus) setBus(a.bus, true, a.kind);
+    for (const step of a.moves) {
+      const group = Array.isArray(step) ? step : [step];
+      await Promise.all(group.map(m => runMove(m, my)));
+      if (my !== token) return;
+    }
+    if (a.bus) setBus(a.bus, false);
+  }
+
+  /* ---------- Paneles ---------- */
+  function phaseClass(p) { return p.indexOf('FETCH') === 0 ? 'ph-fetch' : p.indexOf('DECODE') === 0 ? 'ph-decode' : 'ph-exec'; }
+  function setNow(badge, cls, title, say) {
+    const b = $('badge'); b.textContent = badge; b.className = 'badge ' + cls;
+    $('now-title').textContent = title; $('now-say').textContent = say;
+  }
+  function setCounter() { $('cyc').textContent = 'Ciclo ' + Math.min(idx + (busyRun ? 1 : 0), sched.length) + ' de ' + sched.length; }
+  function setInstrHL(c) {
+    PROG.forEach((_, n) => { $('p-' + n).classList.remove('cur', 'nxt'); });
+    if (c) {
+      $('p-' + c.instr).classList.add('cur');
+      if (c.instr2 != null) $('p-' + c.instr2).classList.add('nxt');
+    }
+  }
+  function buildProg() {
+    $('prog').innerHTML = PROG.map((I, n) =>
+      '<li id="p-' + n + '"><span class="pa">' + n + '</span><code>' + I.text + '</code><span class="pn">' + I.note + '</span></li>').join('');
+  }
+  function buildTL() {
+    const lanes = mode === 'vn' ? [['V', 'Bus único']] : [['I', 'Bus de instrucciones'], ['D', 'Bus de datos']];
+    const cols = N.vn;
+    let h = '<div class="tl-grid" style="--cols:' + cols + '"><div class="tl-lab">Ciclo de reloj</div>';
+    for (let c = 1; c <= cols; c++) h += '<div class="tl-num" id="tn-' + c + '">' + c + '</div>';
+    lanes.forEach(l => {
+      h += '<div class="tl-lab">' + l[1] + '</div>';
+      for (let c = 1; c <= cols; c++) h += '<div class="tl-cell' + (c > sched.length ? ' save' : '') + '" id="tc-' + l[0] + '-' + c + '"></div>';
+    });
+    h += '</div>';
+    $('tl').innerHTML = h;
+    $('tl-cap').textContent = mode === 'vn'
+      ? 'Con un solo bus, cada acceso a memoria lo ocupa por completo. Los bloques azules (instrucciones) y ámbar (datos) nunca coinciden en la misma columna: siempre van uno detrás del otro.'
+      : 'Con dos buses, la siguiente instrucción se trae mientras se accede a datos. Las columnas con borde blanco tienen los dos buses ocupados a la vez; las columnas rayadas del final son ciclos que Harvard se ahorra.';
+    $('tl-total').textContent = (mode === 'vn' ? 'Von Neumann' : 'Harvard') + ': ' + sched.length + ' ciclos para el mismo programa.';
+  }
+  function recordTL(c, n) {
+    const used = c.actions.filter(a => a.bus);
+    used.forEach(a => {
+      const el = $('tc-' + a.bus + '-' + n);
+      if (!el) return;
+      el.classList.add(a.kind === 'i' ? 'i' : 'd');
+      el.textContent = a.kind === 'i' ? 'I' : 'D';
+      if (used.length > 1) el.classList.add('sim');
+    });
+  }
+  function addLog(c, n) {
+    const log = $('log');
+    const empty = log.querySelector('.empty'); if (empty) empty.remove();
+    const li = document.createElement('li');
+    li.innerHTML = '<b>' + n + '</b><span class="lg-ph">' + esc(c.phase.replace(' + ', '+')) + '</span><span>' + esc(c.title) + '</span>';
+    log.insertBefore(li, log.firstChild);
+  }
+  function restText() {
+    if (mode === 'vn') {
+      setNow('LISTO', 'ph-idle', 'Un programa de 4 instrucciones',
+        'Suma 5 + 3 y guarda el resultado en la dirección 12. Todo, código y datos, está en una sola memoria y se llega a ella por un solo bus. Pulsa Reproducir, o Siguiente ciclo para avanzar tú.');
+    } else {
+      setNow('LISTO', 'ph-idle', 'El mismo programa, con dos memorias',
+        'Las instrucciones están en la memoria de programa y los datos en la memoria de datos, cada una con su bus. Pulsa Reproducir y fíjate en los ciclos donde los dos buses trabajan a la vez.');
+    }
+  }
+
+  /* ---------- Ejecución ---------- */
+  async function execCycle() {
+    if (busyRun || idx >= sched.length) return;
+    busyRun = true;
+    const my = token;
+    const c = sched[idx];
+    const num = idx + 1;
+    clearCells();
+    setCounter(); updateButtons();
+    setNow(c.phase + (c.par ? ' · EN PARALELO' : ''), phaseClass(c.phase), c.title, typeof c.say === 'function' ? c.say() : c.say);
+    setInstrHL(c);
+    for (let k = 1; k <= N.vn; k++) { const e = $('tn-' + k); if (e) e.classList.toggle('cur', k === num); }
+    await Promise.all(c.actions.map(a => runAction(a, my)));
+    if (my !== token) return;
+    recordTL(c, num);
+    addLog(c, num);
+    idx++;
+    busyRun = false;
+    setCounter();
+    if (idx >= sched.length) finish();
+    updateButtons();
+  }
+  function finish() {
+    finished = true; playing = false;
+    setInstrHL(null);
+    const other = mode === 'vn' ? 'En Harvard el mismo programa tarda ' + N.h + ' ciclos: ' + (N.vn - N.h) + ' menos.'
+                                : 'En Von Neumann el mismo programa tarda ' + N.vn + ' ciclos: ' + (N.vn - N.h) + ' más.';
+    setNow('FIN', 'ph-end', 'HALT: programa terminado',
+      'Resultado: Mem[12] = ' + S.mem[12] + ' (5 + 3). Tardó ' + sched.length + ' ciclos de reloj. ' + other);
+  }
+  async function playLoop() {
+    const my = token;
+    while (busyRun && my === token) await sleep(60);
+    while (playing && my === token && idx < sched.length) {
+      await execCycle();
+      if (my !== token) return;
+      await sleep(320 / speed);
+    }
+    if (my === token) { playing = false; updateButtons(); }
+  }
+  function updateButtons() {
+    $('btn-play').textContent = playing ? 'Pausar' : (finished ? 'Repetir' : (idx > 0 ? 'Continuar' : 'Reproducir'));
+    $('btn-step').disabled = playing || busyRun || finished;
+  }
+  function reset() {
+    token++; busyRun = false; playing = false; finished = false; idx = 0;
+    hlCount = {}; selCells = new Set();
+    S = freshState();
+    sched = build(mode);
+    buildSVG(); buildProg(); buildTL();
+    renderRegs(true);
+    $('log').innerHTML = '<li class="empty">Aún no hay ciclos. Los verás aquí a medida que avancen.</li>';
+    restText(); setInstrHL(null); setCounter(); updateButtons();
+  }
+
+  /* ---------- Eventos ---------- */
+  $('btn-play').addEventListener('click', () => {
+    if (playing) { playing = false; updateButtons(); return; }
+    if (finished) reset();
+    playing = true; updateButtons(); playLoop();
+  });
+  $('btn-step').addEventListener('click', () => { if (!playing && !busyRun && !finished) execCycle(); });
+  $('btn-reset').addEventListener('click', reset);
+  $('speed').addEventListener('input', e => { speed = parseFloat(e.target.value); $('speed-out').textContent = speed + '×'; });
+  document.querySelectorAll('input[name=arch]').forEach(r => r.addEventListener('change', e => { mode = e.target.value; reset(); }));
+
+  $('n-vn').textContent = N.vn;
+  $('n-h').textContent = N.h;
+  reset();
+})();
+</script>
+</body>
+</html>

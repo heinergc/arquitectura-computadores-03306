@@ -1,0 +1,2044 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<style id="rh03306-css">@font-face{font-family:"RH Sans";src:url(../assets/fonts/source-sans-3.woff2) format("woff2");font-weight:200 900;font-display:swap}@font-face{font-family:"RH Serif";src:url(../assets/fonts/source-serif-4.woff2) format("woff2");font-weight:200 900;font-display:swap}.rh03306{display:flex;align-items:center;gap:6px 20px;flex-wrap:wrap;min-height:40px;padding:6px 16px;margin:0;background:#16223d;color:#dfe5f1;font:400 15px/1.3 "RH Sans","Segoe UI",system-ui,-apple-system,sans-serif;box-sizing:border-box;position:relative;z-index:100;border-bottom:1px solid #34405e}.rh03306 a{color:#fff;text-decoration:none;font-weight:600}.rh03306 a:hover{text-decoration:underline;text-underline-offset:3px}.rh03306 a:focus-visible{outline:2px solid #b9cbff;outline-offset:2px}.rh03306 .rh-home{display:inline-flex;align-items:center;gap:6px}.rh03306 .rh-home svg{width:16px;height:16px;flex:none}.rh03306 .rh-here{color:#c9d3ea;font:600 16px/1.3 "RH Serif",Georgia,serif;font-variant-caps:all-small-caps;letter-spacing:.05em}.rh03306 .rh-more{margin-left:auto;display:flex;gap:16px;flex-wrap:wrap}@media(max-width:560px){.rh03306 .rh-here{display:none}}@media print{.rh03306{display:none}}</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Ing. Heiner Guido Cambronero, Lic.">
+<title>CPU Quest: Misión Unidad de Control</title>
+<!--
+=====================================================================================
+ CPU Quest: Misión Unidad de Control
+ Arquitectura de Computadores (03306) · UNED
+ Creado por Ing. Heiner Guido Cambronero, Lic.
+ Archivo único autocontenido: HTML5 + CSS3 + JavaScript puro + SVG. Sin dependencias.
+
+ ARQUITECTURA INTERNA (separada en módulos, todo dentro de este archivo)
+ ---------------------------------------------------------------------------------
+ 1. MODELO (Engine + MOPS)
+    - Engine.s: estado central de la CPU (registros, memoria, fase, señales, ciclos,
+      instrucción decodificada, historial). Es la ÚNICA fuente de verdad.
+    - MOPS: catálogo de microoperaciones. Cada una declara texto RTL, fase, señales
+      de control, recursos que usa (buses, incrementador...), registros que escribe,
+      "etapas" de transferencia (qué dato viaja por qué ruta) y su efecto apply(s).
+    - Engine.step(ids): ejecuta un ciclo de reloj con una o varias microoperaciones
+      simultáneas, detecta conflictos (mismo bus / mismo destino), y devuelve
+      {antes, después, transferencias, cambios}. Las animaciones se generan SÓLO
+      a partir de este resultado: nunca se animan datos ficticios.
+ 2. MOTOR DE SIMULACIÓN (Sim + Anim)
+    - Sim: ejecuta pasos, guarda instantáneas (CPU + estado del nivel + plan) para
+      RETROCEDER, mantiene un "plan" de pasos programados (reproducir / siguiente).
+    - Anim: reloj propio basado en requestAnimationFrame, con pausa y velocidad.
+ 3. REPRESENTACIÓN VISUAL (Renderer + UI)
+    - Renderer: construye el SVG de la CPU y anima: fase de control (señales),
+      fase de datos (tokens que recorren buses) y fase de escritura (registro que
+      se ilumina mostrando valor anterior → nuevo).
+    - UI: paneles laterales, retroalimentación, historial, estadísticas, modales.
+ 4. EVALUACIÓN (Levels + Game)
+    - Cada nivel valida las acciones del estudiante, explica errores, ofrece pistas
+      y decide cuándo la misión está superada. Game gestiona progreso, puntos,
+      desbloqueo y persistencia (localStorage).
+=====================================================================================
+-->
+<style>
+:root{
+  --bg:#06101e; --panel:#0c1a2d; --panel2:#10233b; --line:#1f3b60; --line2:#2c5d8f;
+  --text:#e9f2ff; --muted:#8ea8c8; --cyan:#4fd1ff; --ok:#3ddc84; --err:#ff5470;
+  --warn:#ffd23f; --addr:#d7c8ff; --white:#ffffff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;font-size:14px}
+button{font-family:inherit}
+header{display:flex;align-items:center;gap:14px;padding:8px 14px;flex-wrap:wrap;
+  background:linear-gradient(90deg,#0a1a30,#0f2a4d);border-bottom:1px solid var(--line)}
+.brand{font-weight:800;font-size:17px;letter-spacing:.3px;line-height:1.35}
+.brand span{color:var(--cyan)}
+.brand small{display:block;font-weight:400;font-size:11px;color:var(--muted)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;
+  padding:6px 10px;cursor:pointer;font-size:12.5px;display:flex;gap:6px;align-items:center}
+.tab:hover:not(:disabled){border-color:var(--cyan)}
+.tab.cur{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan) inset;background:#123056}
+.tab:disabled{opacity:.45;cursor:not-allowed}
+.tab .st-superado{color:var(--ok)} .tab .st-incorrecto{color:var(--err)} .tab .st-pendiente{color:var(--muted)}
+.hdr-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.xp{background:#122c4d;border:1px solid var(--line2);border-radius:20px;padding:5px 12px;font-weight:700}
+.xp b{color:var(--warn)}
+.btn{background:#14365e;color:var(--text);border:1px solid var(--line2);border-radius:8px;padding:7px 12px;
+  cursor:pointer;font-size:13px;transition:.15s}
+.btn:hover:not(:disabled){background:#1a4677;border-color:var(--cyan)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:linear-gradient(180deg,#1d8fd0,#136aa3);border-color:#4fd1ff}
+.btn.ok{background:linear-gradient(180deg,#22a862,#167a46);border-color:var(--ok)}
+.btn.small{padding:4px 8px;font-size:12px}
+.btn.on{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn) inset}
+main{display:grid;grid-template-columns:330px minmax(0,1fr) 340px;gap:10px;padding:10px;height:calc(100vh - 102px)}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:auto;padding:12px}
+.center{display:flex;flex-direction:column;padding:8px;position:relative}
+h2{font-size:16px;margin:0 0 6px;color:var(--cyan)}
+h3{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:14px 0 6px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+.objective{color:#cfe3ff;line-height:1.45}
+.instr{background:#081a30;border:1px solid var(--line2);padding:8px 10px;border-radius:6px;line-height:1.45;color:#d6e8ff;font-size:13px}
+.mono{font-family:Consolas,"Cascadia Mono","Courier New",monospace}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:#123056;border:1px solid var(--line2);border-radius:8px;padding:6px 9px;cursor:grab;font-size:12.5px;
+  user-select:none;touch-action:none;transition:.15s}
+.chip:hover{border-color:var(--cyan)}
+.chip.sel{border-color:var(--warn);box-shadow:0 0 0 2px rgba(255,210,63,.35)}
+.chip.done{background:#0f3b2a;border-color:var(--ok);color:#bff5d6;cursor:default}
+.ghost{position:fixed;pointer-events:none;z-index:999;opacity:.9;box-shadow:0 6px 20px rgba(0,0,0,.5);background:#1a4677;
+  border:1px solid var(--cyan);border-radius:8px;padding:6px 9px;font-size:12.5px;color:#fff}
+.sigbtns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sigbtn{background:#0f2744;border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:8px 6px;cursor:pointer;
+  font-family:Consolas,monospace;font-size:12.5px;transition:.15s}
+.sigbtn:hover:not(:disabled){border-color:var(--cyan)}
+.sigbtn.done{background:#0f3b2a;border-color:var(--ok);color:#c6ffe0}
+.sigbtn.pend{background:#3a3110;border-color:var(--warn);color:#ffe9a0}
+.sigbtn.bad{animation:shake .4s;border-color:var(--err);background:#3d1220}
+.mopbtn{display:block;width:100%;text-align:left;background:#0f2744;border:1px solid var(--line2);color:var(--text);
+  border-radius:8px;padding:6px 9px;margin-bottom:5px;cursor:pointer;font-family:Consolas,monospace;font-size:13px}
+.mopbtn:hover:not(:disabled){border-color:var(--cyan);background:#123056}
+.mopbtn small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.mopbtn.bad{animation:shake .4s;border-color:var(--err)}
+.hide-signals .mopbtn small,.hide-signals .sig{display:none !important}
+.slots{display:flex;flex-direction:column;gap:6px}
+.slot{border:1px dashed var(--line2);border-radius:8px;padding:6px;min-height:40px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+  background:#081a30;cursor:pointer}
+.slot .tlabel{font-weight:800;color:var(--cyan);width:26px;font-family:Consolas,monospace}
+.slot.cur{border-color:var(--warn)}
+.slot.full{border-style:solid;border-color:var(--ok)}
+.slot.drop-hover,.drop-hover{outline:2px solid var(--warn)}
+.slot .placed{background:#0f3b2a;border:1px solid var(--ok);border-radius:6px;padding:4px 7px;font-family:Consolas,monospace;font-size:12.5px}
+.prog{list-style:none;margin:0;padding:0;font-family:Consolas,monospace;font-size:13px}
+.prog li{padding:4px 8px;border-radius:6px;display:flex;gap:8px}
+.prog li .a{color:var(--muted);width:28px}
+.prog li.cur{background:#123056;outline:1px solid var(--warn)}
+.prog li.done{color:#9fe8c0}
+table.dbg{width:100%;border-collapse:collapse;font-size:12.5px}
+table.dbg td,table.dbg th{border-bottom:1px solid var(--line);padding:5px 4px;text-align:left}
+table.dbg td.st{width:20px;text-align:center}
+table.dbg tr.bug td{background:#3d1220}
+table.dbg tr.okr td{background:#0f3324}
+table.dbg tr.run td{background:#3a3110}
+select{background:#0f2744;color:var(--text);border:1px solid var(--line2);border-radius:6px;padding:3px;font-family:Consolas,monospace;font-size:12px;max-width:150px}
+.decis{display:flex;flex-direction:column;gap:6px}
+.actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+svg#cpu{width:100%;height:auto;flex:1;min-height:0;display:block;background:radial-gradient(ellipse at 40% 35%,#0e2441 0%,#081527 70%);border-radius:10px;border:1px solid var(--line)}
+.controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 2px 2px}
+.controls label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.controls input[type=range]{width:110px}
+.sep{width:1px;height:24px;background:var(--line);margin:0 4px}
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12.5px}
+.status-grid div{background:#081a30;border-radius:6px;padding:5px 7px}
+.status-grid b{display:block;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase}
+.pipeline{display:flex;gap:3px;margin-top:6px}
+.pipeline span{flex:1;text-align:center;font-size:11px;padding:4px 0;border-radius:4px;background:#081a30;color:var(--muted);border:1px solid var(--line)}
+.pipeline span.on{background:var(--warn);color:#201800;font-weight:800;border-color:var(--warn)}
+.mop{font-family:Consolas,monospace;font-size:14px;color:var(--warn);min-height:20px}
+.mopwhy{font-size:12px;color:#c4d8f2;margin-top:4px;line-height:1.4}
+.sigchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.sigchip{background:var(--warn);color:#201800;font-family:Consolas,monospace;font-size:11px;padding:2px 6px;border-radius:5px;font-weight:700}
+.sigchip.none{background:#1a2f4a;color:var(--muted);font-weight:400}
+.regs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-family:Consolas,monospace;font-size:12px}
+.regs div{background:#081a30;border-radius:5px;padding:4px 6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transition:background .3s}
+.regs div b{color:var(--cyan);margin-right:4px}
+.regs div.chg{background:#3a3110}
+.feedback{border-radius:10px;padding:10px;font-size:13px;line-height:1.45;border:1px solid var(--line);background:#081a30}
+.feedback.ok{border-color:var(--ok);background:#0b2a1e}
+.feedback.err{border-color:var(--err);background:#2c0d17}
+.feedback.warn{border-color:var(--warn);background:#2a2410}
+.feedback .ft{font-weight:800;margin-bottom:4px}
+.feedback.ok .ft{color:var(--ok)} .feedback.err .ft{color:var(--err)} .feedback.warn .ft{color:var(--warn)} .feedback.info .ft{color:var(--cyan)}
+.hint{margin-top:6px;padding:6px 8px;border-radius:6px;background:rgba(255,210,63,.1);border:1px solid rgba(255,210,63,.4);color:#ffe9a0}
+.retry{margin-top:6px;font-size:12px;color:var(--muted)}
+.history{list-style:none;margin:0;padding:0;font-size:11.5px;max-height:230px;overflow:auto;font-family:Consolas,monospace}
+.history li{padding:3px 6px;border-bottom:1px solid #12263f}
+.history li.ok{color:#9fe8c0} .history li.err{color:#ff9aac} .history li.info{color:#9fc6ee} .history li.mop{color:#ffe9a0}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;font-size:11px;text-align:center}
+.stats div{background:#081a30;border-radius:6px;padding:5px 2px}
+.stats b{display:block;font-size:15px;color:var(--white)}
+.modal{position:fixed;inset:0;background:rgba(2,8,18,.75);display:none;align-items:center;justify-content:center;z-index:500;padding:16px}
+.modal.show{display:flex}
+.modal .box{background:var(--panel);border:1px solid var(--cyan);border-radius:14px;max-width:680px;width:100%;max-height:88vh;overflow:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.modal h2{font-size:20px}
+.modal table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0}
+.modal td,.modal th{border-bottom:1px solid var(--line);padding:5px;text-align:left}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#1a4677;border:1px solid var(--cyan);padding:9px 16px;border-radius:10px;
+  z-index:600;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+.burst{position:absolute;inset:0;pointer-events:none;display:none;align-items:center;justify-content:center;z-index:5}
+.burst.show{display:flex}
+.burst .ring{position:absolute;width:120px;height:120px;border-radius:50%;border:6px solid var(--ok);animation:ring 1.2s ease-out forwards}
+.burst .msg{font-size:30px;font-weight:900;color:var(--ok);background:rgba(6,16,30,.85);padding:8px 22px;border-radius:12px;border:2px solid var(--ok);animation:pop 1.6s ease-out forwards}
+.burst i{position:absolute;width:9px;height:9px;border-radius:2px;animation:fly 1.3s ease-out forwards}
+@keyframes ring{from{transform:scale(.2);opacity:1}to{transform:scale(5);opacity:0}}
+@keyframes pop{0%{transform:scale(.3);opacity:0}25%{transform:scale(1.15);opacity:1}80%{opacity:1}100%{opacity:0;transform:scale(1)}}
+@keyframes fly{from{transform:translate(0,0) rotate(0);opacity:1}to{transform:translate(var(--dx),var(--dy)) rotate(540deg);opacity:0}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.mode{display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+.mode button{background:#0f2744;border:0;color:var(--muted);padding:6px 10px;cursor:pointer;font-size:12px}
+.mode button.on{background:#1d6fa8;color:#fff}
+.small-note{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+.lvlstate{font-size:11px;padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle}
+.lvlstate.pendiente{background:#1a2f4a;color:var(--muted)} .lvlstate.incorrecto{background:#3d1220;color:#ff9aac} .lvlstate.superado{background:#0f3b2a;color:#9fe8c0}
+
+/* ---------- SVG de la CPU ---------- */
+.comp .box{fill:#0f2742;stroke:var(--line2);stroke-width:2}
+.comp{cursor:default}
+.comp.drop-hover .box{stroke:var(--warn);stroke-width:3;outline:none}
+.comp.active .box{stroke:var(--warn);fill:#2b2a12}
+.rname{fill:var(--muted);font-size:11px;font-weight:700}
+.rval{fill:#fff;font:700 18px Consolas,monospace;text-anchor:middle}
+.rval.small{font-size:11.5px}
+.rold{fill:var(--warn);font:10px Consolas,monospace;text-anchor:middle;opacity:0;transition:opacity .4s}
+.rold.show{opacity:1}
+.title{fill:#dbeaff;font-weight:800;font-size:13px}
+.sub{fill:#bcd3f0;font-size:11px}
+.sub2{fill:var(--muted);font-size:11px}
+.wire{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.bus{stroke:#2a5a8c;stroke-width:7}
+.bus-addr{stroke:#5b4f8f}
+.bus-data{stroke:#1f6f8f}
+.tap{stroke:#24507d;stroke-width:3}
+.thin{stroke:#24507d;stroke-width:2.5}
+.ctrlw{stroke:#5a6f2a;stroke-width:2;stroke-dasharray:5 4}
+.ctrlw.on{stroke:var(--warn);stroke-width:3;filter:url(#glow)}
+.buslabel{fill:#7fa3cc;font-size:11px;font-weight:600}
+.hit{stroke:transparent;stroke-width:22;fill:none;pointer-events:stroke;cursor:default}
+.hit.drop-hover{stroke:rgba(255,210,63,.25)}
+.route-glow{fill:none;stroke-width:6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:12 8;animation:dash .5s linear infinite;opacity:.95}
+.g-int{stroke:var(--cyan)} .g-data{stroke:var(--cyan)} .g-addr{stroke:var(--addr)} .g-inc{stroke:#9fe8c0} .g-op{stroke:#ffb36b} .g-ctrl{stroke:var(--warn)} .g-dec{stroke:#ffb36b}
+@keyframes dash{to{stroke-dashoffset:-20}}
+.token rect{stroke:#fff;stroke-width:1.5;filter:url(#glow)}
+.token text{font:700 12px Consolas,monospace;text-anchor:middle;fill:#04121f}
+.tok-int rect,.tok-data rect{fill:var(--cyan)} .tok-addr rect{fill:var(--addr)} .tok-inc rect{fill:#9fe8c0} .tok-op rect{fill:#ffb36b} .tok-dec rect{fill:#ffb36b}
+.lamp rect{fill:#10263f;stroke:#2c4d73;stroke-width:1}
+.lamp text{fill:#6f8db0;font:700 8.4px Consolas,monospace;text-anchor:middle}
+.lamp.on rect{fill:var(--warn);stroke:#fff;filter:url(#glow)}
+.lamp.on text{fill:#1d1600}
+.mrow rect{fill:#0a1f37;stroke:#1d3a5e;stroke-width:1}
+.mrow .maddr{fill:var(--muted);font:12px Consolas,monospace}
+.mrow .mval{fill:#e9f2ff;font:12px Consolas,monospace}
+.mrow.pc-ptr .maddr{fill:var(--cyan);font-weight:700}
+.mrow.mar-ptr rect{stroke:var(--addr);stroke-width:2}
+.mrow.access rect{fill:#2b2a12;stroke:var(--warn);stroke-width:2}
+.float{font:700 12px "Segoe UI",sans-serif;text-anchor:middle;animation:floatUp 2.2s ease-out forwards;pointer-events:none}
+.float.ok{fill:var(--ok)} .float.err{fill:var(--err)} .float.info{fill:var(--warn)}
+@keyframes floatUp{0%{opacity:0;transform:translateY(6px)}15%{opacity:1}75%{opacity:1}100%{opacity:0;transform:translateY(-18px)}}
+.flash-chg .box,.flash-chg>rect{animation:fchg 1.3s ease-out}
+.flash-ok .box,.flash-ok>rect{animation:fok 1.4s ease-out}
+.flash-err .box,.flash-err>rect{animation:ferr 1.6s ease-out}
+.flash-chg polygon,.flash-ok polygon{animation:fok 1.4s ease-out}
+.flash-err polygon{animation:ferr 1.6s ease-out}
+@keyframes fchg{0%,60%{stroke:var(--warn);stroke-width:4;fill:#3a3410}100%{}}
+@keyframes fok{0%,60%{stroke:var(--ok);stroke-width:4;fill:#0f3b2a}100%{}}
+@keyframes ferr{0%,70%{stroke:var(--err);stroke-width:4;fill:#4a1020}100%{}}
+.revealed .box,.revealed polygon{stroke:var(--ok)}
+.mux polygon{fill:#0f2742;stroke:var(--line2);stroke-width:2}
+.mux text{fill:var(--muted);font:700 9px Consolas,monospace;text-anchor:middle}
+.muxin.sel{fill:var(--warn) !important}
+.halted .box{stroke:var(--err)}
+@media (max-width:1250px){
+  main{grid-template-columns:1fr;height:auto}
+  .pane{max-height:none}
+}
+</style>
+</head>
+<body>
+<nav class="rh03306" aria-label="Recursos del curso 03306"><a class="rh-home" href="../index.html"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8H3M7 3.5 2.5 8 7 12.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Recursos 03306</a><span class="rh-here">Figura R.1 · CPU Quest: Misión Unidad de Control</span><span class="rh-more"><a href="von-neumann.html">R.2 Von Neumann</a><a href="glosario.html">R.3 Glosario</a></span></nav>
+<header>
+  <div class="brand">CPU <span>Quest</span>: Misión Unidad de Control
+    <small>Arquitectura de Computadores (03306) · UNED · Laboratorio virtual</small>
+    <small>Creado por Ing. Heiner Guido Cambronero, Lic.</small></div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="hdr-right">
+    <div class="xp">★ <b id="xpTotal">0</b> XP</div>
+    <button class="btn small" id="btnResults">Resultados</button>
+    <button class="btn small" id="btnHelp">Ayuda</button>
+  </div>
+</header>
+
+<main>
+  <!-- PANEL IZQUIERDO: misión y herramientas -->
+  <aside class="pane" id="left">
+    <h2 id="lvlName">Nivel</h2>
+    <div class="card">
+      <div class="objective" id="lvlObjective"></div>
+    </div>
+    <div class="instr" id="lvlInstr"></div>
+    <div id="tools"></div>
+    <div class="actions">
+      <button class="btn primary" id="btnCheck">✔ Comprobar</button>
+      <button class="btn" id="btnHint">💡 Pista</button>
+    </div>
+  </aside>
+
+  <!-- PANEL CENTRAL: CPU animada -->
+  <section class="pane center">
+    <svg id="cpu" viewBox="0 0 900 560" aria-label="Diagrama animado de la CPU"></svg>
+    <div class="burst" id="burst"></div>
+    <div class="controls">
+      <button class="btn small" id="cPlay" title="Reproducir">▶ Reproducir</button>
+      <button class="btn small" id="cPause" title="Pausar">⏸ Pausar</button>
+      <button class="btn small" id="cNext" title="Siguiente microoperación">⏭ Siguiente</button>
+      <button class="btn small" id="cBack" title="Retroceder un paso">⏮ Retroceder</button>
+      <button class="btn small" id="cReset" title="Reiniciar simulación">⟲ Reiniciar</button>
+      <span class="sep"></span>
+      <label>Velocidad <input type="range" id="cSpeed" min="0.25" max="3" step="0.25" value="1"><span id="cSpeedV">1×</span></label>
+      <label><input type="checkbox" id="cSignals" checked> Señales</label>
+      <div class="mode" title="Modo de juego">
+        <button id="mGuided">Guiado</button><button id="mChallenge">Desafío</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PANEL DERECHO: estado y retroalimentación -->
+  <aside class="pane" id="right">
+    <h3 style="margin-top:0">Progreso</h3>
+    <div class="stats" id="stats"></div>
+    <h3>Estado de la CPU</h3>
+    <div class="status-grid">
+      <div><b>Fase</b><span id="sPhase">—</span></div>
+      <div><b>Estado</b><span id="sState">—</span></div>
+      <div><b>Ciclos (t)</b><span id="sCycles">0</span></div>
+      <div><b>Nivel</b><span id="sLevel">—</span></div>
+    </div>
+    <div class="pipeline" id="pipeline"></div>
+    <h3>Microoperación ejecutada</h3>
+    <div class="card" style="margin-bottom:0">
+      <div class="mop" id="sMop">—</div>
+      <div class="mopwhy" id="sMopWhy"></div>
+      <div class="sigchips" id="sSignals"></div>
+    </div>
+    <h3>Registros</h3>
+    <div class="regs" id="sRegs"></div>
+    <h3>Resultado / Explicación</h3>
+    <div class="feedback info" id="feedback"><div class="ft">Bienvenido</div>Selecciona un nivel para comenzar.</div>
+    <h3>Historial</h3>
+    <ul class="history" id="history"></ul>
+  </aside>
+</main>
+
+<div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/** Creador del videojuego (se muestra en cabecera, bienvenida, ayuda y resultados) */
+const AUTHOR = 'Ing. Heiner Guido Cambronero, Lic.';
+/* =====================================================================
+   0. UTILIDADES
+   ===================================================================== */
+const $ = s => document.querySelector(s);
+const clone = o => JSON.parse(JSON.stringify(o));
+const NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function h(tag, attrs = {}, children = []) {
+  const e = document.createElement(tag);
+  for (const k in attrs) {
+    if (k === 'class') e.className = attrs[k];
+    else if (k === 'html') e.innerHTML = attrs[k];
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), attrs[k]);
+    else if (attrs[k] !== false && attrs[k] != null) e.setAttribute(k, attrs[k]);
+  }
+  (Array.isArray(children) ? children : [children]).forEach(c => {
+    if (c == null) return;
+    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  });
+  return e;
+}
+/** Representación legible de un valor de registro/memoria */
+const fmt = v => (v === null || v === undefined) ? '—' : (typeof v === 'object' ? v.text : String(v));
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function pointAt(pts, p) {
+  const seg = []; let L = 0;
+  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(d); L += d; }
+  let t = p * L;
+  for (let i = 0; i < seg.length; i++) {
+    if (t <= seg[i] || i === seg.length - 1) {
+      const r = seg[i] ? Math.min(1, t / seg[i]) : 1;
+      return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * r, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * r];
+    }
+    t -= seg[i];
+  }
+  return pts[pts.length - 1];
+}
+
+/* =====================================================================
+   1. MODELO: instrucciones, microoperaciones y estado central de la CPU
+   ===================================================================== */
+const INS = {
+  load: (r, a) => ({ op: 'LOAD', r, addr: a, text: `LOAD ${r}, [${a}]` }),
+  store: (r, a) => ({ op: 'STORE', r, addr: a, text: `STORE ${r}, [${a}]` }),
+  add: (rd, ra, rb) => ({ op: 'ADD', rd, ra, rb, text: `ADD ${rd}, ${ra}, ${rb}` }),
+  sub: (rd, ra, rb) => ({ op: 'SUB', rd, ra, rb, text: `SUB ${rd}, ${ra}, ${rb}` }),
+  jz: a => ({ op: 'JZ', addr: a, text: `JZ ${a}` }),
+  halt: () => ({ op: 'HALT', text: 'HALT' })
+};
+const OPCODES = { LOAD: '0001', STORE: '0010', ADD: '0011', SUB: '0100', JZ: '0101', HALT: '1111' };
+/** Señales que la UC deberá activar en la fase de ejecución (se muestran al decodificar) */
+const EXEC_SIGNALS = {
+  LOAD: ['MAR_LOAD', 'MEM_READ', 'REG_WRITE'], STORE: ['MAR_LOAD', 'MBR_LOAD', 'MEM_WRITE'],
+  ADD: ['ALU_OP=ADD', 'REG_WRITE'], SUB: ['ALU_OP=SUB', 'REG_WRITE'], JZ: ['PC_LOAD si Z=1'], HALT: ['HALT']
+};
+const LAMPS = ['MAR_LOAD', 'MBR_LOAD', 'MEM_READ', 'MEM_WRITE', 'PC_INC', 'IR_LOAD', 'REG_WRITE', 'ALU_OP', 'PC_LOAD', 'HALT'];
+const PHASES = ['FETCH', 'DECODE', 'EXECUTE', 'MEMORY', 'WRITE BACK'];
+
+/** Transferencia a través del bus interno entre dos registros */
+const busT = (a, b, val) => ({ route: `bus:${a}>${b}`, val, bus: 'int' });
+const regToReg = (dst, src, phase, signals, why, comp) => ({
+  text: `${dst} ← ${src}`, phase, signals, res: ['bus'], writes: [dst], comp: comp || dst,
+  stages: s => [[busT(src, dst, s.reg[src])]],
+  apply: s => { s.reg[dst] = s.reg[src]; }, why
+});
+
+/**
+ * Catálogo de microoperaciones.
+ * stages(s) se evalúa con el estado ANTERIOR: describe qué valor viaja y por dónde.
+ * apply(s) modifica el estado. res = recursos físicos ocupados durante el ciclo.
+ */
+const MOPS = {
+  MAR_PC: {
+    text: 'MAR ← PC', phase: 'FETCH', signals: ['MAR_LOAD'], res: ['bus'], writes: ['MAR'], comp: 'MAR',
+    stages: s => [[busT('PC', 'MAR', s.reg.PC)]],
+    apply: s => { s.reg.MAR = s.reg.PC; s.inExec = false; },
+    why: 'El PC contiene la dirección de la siguiente instrucción. Se copia al MAR por el bus interno para colocarla en el bus de direcciones.'
+  },
+  MBR_MEM: {
+    text: 'MBR ← Memoria[MAR]', phase: s => s.inExec ? 'MEMORY' : 'FETCH', signals: ['MEM_READ', 'MBR_LOAD'],
+    res: ['addr', 'data'], writes: ['MBR'], comp: 'MEM', memRead: true,
+    stages: s => [[{ route: 'MAR>MEM', val: s.reg.MAR, bus: 'addr' }], [{ route: 'MEM>MBR', val: s.mem[s.reg.MAR], bus: 'data' }]],
+    apply: s => { const v = s.mem[s.reg.MAR]; s.reg.MBR = (v === undefined ? 0 : v); },
+    why: 'La UC activa MEM_READ por el bus de control: la memoria lee la posición que indica el MAR (bus de direcciones) y deposita su contenido en el MBR (bus de datos).'
+  },
+  PC_INC: {
+    text: 'PC ← PC + I', phase: 'FETCH', signals: ['PC_INC'], res: ['inc'], writes: ['PC'], comp: 'PC', mux: 'inc',
+    stages: s => [[{ route: 'PC>INC>PC', val: s.reg.PC + 1, bus: 'inc' }]],
+    apply: s => { s.reg.PC = s.reg.PC + 1; },
+    why: 'El PC se incrementa en I (longitud de la instrucción; aquí I = 1 porque cada instrucción ocupa una posición). Usa el incrementador, no el bus interno: por eso puede ocurrir a la vez que la lectura de memoria.'
+  },
+  IR_MBR: Object.assign(regToReg('IR', 'MBR', 'FETCH', ['IR_LOAD'], 'La instrucción leída pasa del MBR al IR, donde la Unidad de Control podrá decodificarla.'), {}),
+  DECODE: {
+    text: 'DECODE (UC ← IR.opcode)', phase: 'DECODE', signals: [], res: ['dec'], writes: [], comp: 'UC',
+    stages: s => [[{ route: 'IR>UC', val: s.reg.IR && s.reg.IR.op ? s.reg.IR.op : '?', bus: 'dec' }]],
+    apply: s => { const ir = s.reg.IR; s.decoded = ir && ir.op ? { op: ir.op, code: OPCODES[ir.op] } : null; s.inExec = true; },
+    why: 'La Unidad de Control analiza el código de operación del IR y determina qué señales de control activará durante la ejecución.'
+  },
+  MAR_IRD: {
+    text: 'MAR ← IR.dir', phase: 'EXECUTE', signals: ['MAR_LOAD'], res: ['bus'], writes: ['MAR'], comp: 'MAR',
+    stages: s => [[busT('IR', 'MAR', s.reg.IR ? s.reg.IR.addr : 0)]],
+    apply: s => { s.reg.MAR = s.reg.IR ? s.reg.IR.addr : 0; },
+    why: 'El campo de dirección de la instrucción (IR.dir) se copia al MAR para acceder al operando en memoria.'
+  },
+  R1_MBR: regToReg('R1', 'MBR', 'WRITE BACK', ['REG_WRITE'], 'REG_WRITE: el dato que está en el MBR se escribe en el registro R1.'),
+  R2_MBR: regToReg('R2', 'MBR', 'WRITE BACK', ['REG_WRITE'], 'REG_WRITE: el dato que está en el MBR se escribe en el registro R2.'),
+  R3_MBR: regToReg('R3', 'MBR', 'WRITE BACK', ['REG_WRITE'], 'REG_WRITE: el dato que está en el MBR se escribe en el registro R3.'),
+  ALU_ADD: {
+    text: 'ALU ← R1 + R2', phase: 'EXECUTE', signals: ['ALU_OP=ADD'], res: ['opA', 'opB'], writes: ['ALU', 'Z'], comp: 'ALU',
+    stages: s => [[{ route: 'R1>ALUA', val: s.reg.R1, bus: 'op' }, { route: 'R2>ALUB', val: s.reg.R2, bus: 'op' }]],
+    apply: s => { s.reg.ALU = (+s.reg.R1 || 0) + (+s.reg.R2 || 0); s.reg.Z = s.reg.ALU === 0 ? 1 : 0; s.aluOp = 'ADD'; },
+    why: 'ALU_OP = ADD: la ALU recibe R1 y R2 por sus entradas y calcula la suma. La bandera Z se pone a 1 sólo si el resultado es 0.'
+  },
+  ALU_SUB: {
+    text: 'ALU ← R1 − R2', phase: 'EXECUTE', signals: ['ALU_OP=SUB'], res: ['opA', 'opB'], writes: ['ALU', 'Z'], comp: 'ALU',
+    stages: s => [[{ route: 'R1>ALUA', val: s.reg.R1, bus: 'op' }, { route: 'R2>ALUB', val: s.reg.R2, bus: 'op' }]],
+    apply: s => { s.reg.ALU = (+s.reg.R1 || 0) - (+s.reg.R2 || 0); s.reg.Z = s.reg.ALU === 0 ? 1 : 0; s.aluOp = 'SUB'; },
+    why: 'ALU_OP = SUB: la ALU calcula R1 − R2. Si el resultado es 0, la bandera Z se pone a 1.'
+  },
+  R3_ALU: {
+    text: 'R3 ← ALU', phase: 'WRITE BACK', signals: ['REG_WRITE'], res: ['bus'], writes: ['R3'], comp: 'R3',
+    stages: s => [[busT('ALU', 'R3', s.reg.ALU)]],
+    apply: s => { s.reg.R3 = s.reg.ALU; },
+    why: 'REG_WRITE: el resultado de la ALU viaja por el bus interno y se guarda en R3.'
+  },
+  MBR_R3: regToReg('MBR', 'R3', 'EXECUTE', ['MBR_LOAD'], 'El dato que se va a almacenar (R3) se copia en el MBR, el único registro conectado al bus de datos.'),
+  MEM_MBR: {
+    text: 'Memoria[MAR] ← MBR', phase: 'MEMORY', signals: ['MEM_WRITE'], res: ['addr', 'data'], writes: ['MEM'], comp: 'MEM',
+    stages: s => [[{ route: 'MAR>MEM', val: s.reg.MAR, bus: 'addr' }, { route: 'MBR>MEM', val: s.reg.MBR, bus: 'data' }]],
+    apply: s => { s.mem[s.reg.MAR] = s.reg.MBR; },
+    why: 'MEM_WRITE: la memoria guarda el contenido del MBR (bus de datos) en la posición que indica el MAR (bus de direcciones).'
+  },
+  MEM_NOWRITE: {
+    text: 'MBR → interfaz de memoria (sin MEM_WRITE)', phase: 'MEMORY', signals: [], res: ['addr', 'data'], writes: [], comp: 'MEM', noWrite: true,
+    stages: s => [[{ route: 'MAR>MEM', val: s.reg.MAR, bus: 'addr' }, { route: 'MBR>MEM', val: s.reg.MBR, bus: 'data' }]],
+    apply: s => { },
+    why: 'El dato llega por el bus de datos hasta la interfaz de la memoria, pero sin la señal MEM_WRITE la memoria no lo almacena.'
+  },
+  HALT: {
+    text: 'HALT', phase: 'EXECUTE', signals: ['HALT'], res: [], writes: [], comp: 'UC',
+    stages: s => [], apply: s => { s.halted = true; },
+    why: 'HALT: la Unidad de Control detiene el ciclo de instrucción. No se buscan más instrucciones.'
+  },
+  HALT_REGW: {
+    text: 'HALT + R1 ← bus (REG_WRITE erróneo)', phase: 'EXECUTE', signals: ['HALT', 'REG_WRITE'], res: ['bus'], writes: ['R1'], comp: 'R1',
+    stages: s => [[busT('MBR', 'R1', s.reg.MBR)]],
+    apply: s => { s.reg.R1 = s.reg.MBR; s.halted = true; },
+    why: 'Con REG_WRITE activa por error, el registro R1 captura lo que circula por el bus interno (el contenido del MBR) antes de detenerse la CPU.'
+  },
+  PC_IRD: {
+    text: 'PC ← IR.dir', phase: 'EXECUTE', signals: ['PC_LOAD'], res: ['mux'], writes: ['PC'], comp: 'PC', mux: 'dir',
+    stages: s => [[{ route: 'IR>MUX>PC', val: s.reg.IR ? s.reg.IR.addr : 0, bus: 'int' }]],
+    apply: s => { s.reg.PC = s.reg.IR ? s.reg.IR.addr : 0; },
+    why: 'PC_LOAD = 1 y el selector de entrada del PC elige IR.dir: el PC recibe la dirección destino del salto.'
+  },
+  PC_KEEP: {
+    text: 'PC sin cambios (PC_LOAD = 0)', phase: 'EXECUTE', signals: [], res: [], writes: [], comp: 'PC', mux: 'hold', holdPC: true,
+    stages: s => [], apply: s => { },
+    why: 'PC_LOAD = 0: el PC conserva el valor PC + I que ya se calculó durante el FETCH. La ejecución continúa de forma secuencial.'
+  }
+};
+
+/** Motor del modelo: estado central + ejecución de ciclos */
+const Engine = {
+  s: null,
+  fresh(cfg = {}) {
+    const s = {
+      reg: { PC: 0, IR: null, MAR: null, MBR: null, R1: 0, R2: 0, R3: 0, ALU: null, Z: 0 },
+      mem: {}, phase: '—', halted: false, cycles: 0, signals: [], lastMop: '—', lastWhy: '',
+      decoded: null, inExec: false, aluOp: null, log: []
+    };
+    Object.assign(s.reg, clone(cfg.reg || {}));
+    Object.assign(s.mem, clone(cfg.mem || {}));
+    if (cfg.decoded && s.reg.IR) { s.decoded = { op: s.reg.IR.op, code: OPCODES[s.reg.IR.op] }; s.inExec = true; s.phase = 'EXECUTE'; }
+    this.s = s;
+    return s;
+  },
+  /** Ejecuta UN ciclo de reloj con una o varias microoperaciones simultáneas */
+  step(ids) {
+    const s = this.s;
+    const mops = ids.map(id => { if (!MOPS[id]) throw new Error('Microoperación desconocida: ' + id); return MOPS[id]; });
+    // Comprobación de compatibilidad: no puede usarse el mismo recurso ni escribirse el mismo destino dos veces
+    const used = {}, wr = {};
+    mops.forEach(m => {
+      m.res.forEach(r => { if (used[r]) throw new Error(`Conflicto: «${used[r]}» y «${m.text}» usan el mismo recurso (${r}).`); used[r] = m.text; });
+      m.writes.forEach(w => { if (wr[w]) throw new Error(`Conflicto: dos microoperaciones escriben ${w} en el mismo ciclo.`); wr[w] = 1; });
+    });
+    const before = clone(s);
+    const stageLists = mops.map(m => m.stages(s));            // valores calculados con el estado previo
+    const phase = typeof mops[0].phase === 'function' ? mops[0].phase(s) : mops[0].phase;
+    mops.forEach(m => m.apply(s));
+    s.cycles++;
+    s.signals = [...new Set(mops.flatMap(m => m.signals))];
+    s.lastMop = mops.map(m => m.text).join('   ∥   ');
+    s.lastWhy = mops.map(m => m.why).join(' ');
+    s.phase = phase;
+    s.log.push({ c: s.cycles, t: s.lastMop, sig: s.signals.slice(), ph: phase });
+    const n = Math.max(0, ...stageLists.map(l => l.length));
+    const stages = [];
+    for (let i = 0; i < n; i++) stages.push(stageLists.flatMap(l => l[i] || []));
+    const changed = Object.keys(s.reg).filter(k => !same(before.reg[k], s.reg[k]));
+    const addrs = new Set([...Object.keys(before.mem), ...Object.keys(s.mem)]);
+    const memChanged = [...addrs].filter(a => !same(before.mem[a], s.mem[a]));
+    const flags = {
+      noWrite: mops.some(m => m.noWrite), holdPC: mops.some(m => m.holdPC),
+      mux: (mops.find(m => m.mux) || {}).mux || null, memRead: mops.some(m => m.memRead)
+    };
+    return { ids, before, after: clone(s), stages, changed, memChanged, flags,
+      decodedChanged: !same(before.decoded, s.decoded), haltedChanged: before.halted !== s.halted };
+  }
+};
+
+/* =====================================================================
+   2. MOTOR DE ANIMACIÓN (reloj propio con pausa y velocidad)
+   ===================================================================== */
+const Anim = {
+  speed: 1, paused: false, clock: 0, last: 0, jobs: [],
+  init() {
+    const loop = t => {
+      const dt = this.last ? Math.min(t - this.last, 100) : 0;
+      this.last = t;
+      if (!this.paused) this.clock += dt * this.speed;
+      this.tick();
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  },
+  /** tracks: [{t0,t1,start(),update(p),end()}] en ms de reloj de simulación */
+  run(tracks) {
+    return new Promise(res => {
+      const total = Math.max(0, ...tracks.map(t => t.t1));
+      this.jobs.push({ start: this.clock, tracks, total, res });
+    });
+  },
+  tick() {
+    for (const j of this.jobs.slice()) {
+      const local = this.clock - j.start;
+      for (const tr of j.tracks) {
+        if (!tr._s && local >= tr.t0) { tr._s = true; tr.start && tr.start(); }
+        if (tr._s && !tr._e) {
+          const p = tr.t1 > tr.t0 ? Math.min(1, (local - tr.t0) / (tr.t1 - tr.t0)) : 1;
+          tr.update && tr.update(p);
+          if (p >= 1) { tr._e = true; tr.end && tr.end(); }
+        }
+      }
+      if (local >= j.total) {
+        j.tracks.forEach(tr => {
+          if (!tr._s) { tr._s = true; tr.start && tr.start(); }
+          if (!tr._e) { tr._e = true; tr.update && tr.update(1); tr.end && tr.end(); }
+        });
+        this.jobs.splice(this.jobs.indexOf(j), 1);
+        j.res();
+      }
+    }
+  },
+  /** Completa de inmediato la animación en curso */
+  skip() { this.jobs.forEach(j => j.start = this.clock - j.total - 1); },
+  /** Espera simple sobre el reloj de simulación (respeta pausa y velocidad) */
+  wait(ms) { return this.run([{ t0: 0, t1: ms }]); }
+};
+
+/* =====================================================================
+   3. REPRESENTACIÓN VISUAL: SVG de la CPU
+   ===================================================================== */
+const G = {
+  UC: { x: 190, y: 15, w: 300, h: 110 }, PC: { x: 30, y: 170, w: 110, h: 60 }, IR: { x: 200, y: 170, w: 130, h: 60 },
+  MAR: { x: 410, y: 170, w: 110, h: 60 }, MBR: { x: 560, y: 170, w: 110, h: 60 },
+  R1: { x: 30, y: 330, w: 105, h: 55 }, R2: { x: 150, y: 330, w: 105, h: 55 }, R3: { x: 270, y: 330, w: 105, h: 55 },
+  ALU: { x: 430, y: 320, w: 160, h: 110 }, Z: { x: 610, y: 398, w: 56, h: 38 }, MEM: { x: 720, y: 20, w: 168 }, BUS_Y: 290
+};
+/** Conexión de cada componente con el bus interno: [punto en componente, ..., punto en bus] */
+const TAP = {
+  PC: [[85, 230], [85, 290]], IR: [[265, 230], [265, 290]], MAR: [[465, 230], [465, 290]], MBR: [[615, 230], [615, 290]],
+  R1: [[82, 330], [82, 290]], R2: [[202, 330], [202, 290]], R3: [[322, 330], [322, 290]], ALU: [[590, 375], [700, 375], [700, 290]]
+};
+const ROUTES = {
+  'MAR>MEM': [[465, 170], [465, 140], [720, 140]],
+  'MEM>MBR': [[720, 200], [670, 200]],
+  'MBR>MEM': [[670, 200], [720, 200]],
+  'PC>INC>PC': [[30, 200], [15, 200], [15, 80], [49, 80], [62, 93], [62, 118], [85, 150], [85, 170]],
+  'IR>MUX>PC': [[200, 185], [165, 185], [165, 100], [108, 100], [108, 118], [85, 150], [85, 170]],
+  'IR>UC': [[265, 170], [265, 125]],
+  'R1>ALUA': [[82, 385], [82, 448], [410, 448], [410, 342], [430, 342]],
+  'R2>ALUB': [[202, 385], [202, 464], [420, 464], [420, 410], [430, 410]],
+  'CTRL': [[490, 45], [720, 45]],
+  'CTRL_ALU': [[490, 105], [545, 105], [545, 340]],
+  'CTRL_MUX': [[200, 125], [200, 134], [124, 134]]
+};
+const pts2str = pts => pts.map(p => p.join(',')).join(' ');
+
+const Renderer = {
+  el: {}, L: {}, mystery: [], memView: [],
+  route(key) {
+    if (key.startsWith('bus:')) {
+      const [a, b] = key.slice(4).split('>');
+      return TAP[a].concat(TAP[b].slice().reverse());
+    }
+    return ROUTES[key];
+  },
+  build() {
+    const svg = $('#cpu'); svg.innerHTML = '';
+    const defs = svgEl('defs', {}, svg);
+    const f = svgEl('filter', { id: 'glow', x: '-50%', y: '-50%', width: '200%', height: '200%' }, defs);
+    svgEl('feGaussianBlur', { stdDeviation: '2.5', result: 'b' }, f);
+    const m = svgEl('feMerge', {}, f); svgEl('feMergeNode', { in: 'b' }, m); svgEl('feMergeNode', { in: 'SourceGraphic' }, m);
+    this.L.wires = svgEl('g', {}, svg);
+    this.L.glow = svgEl('g', {}, svg);
+    this.L.comps = svgEl('g', {}, svg);
+    this.L.fx = svgEl('g', {}, svg);
+    this.L.tokens = svgEl('g', {}, svg);
+    const W = this.L.wires;
+    const line = (pts, cls, extra = {}) => svgEl('polyline', Object.assign({ points: pts2str(pts), class: 'wire ' + cls }, extra), W);
+    const label = (x, y, txt, comp, extra = {}) => {
+      const t = svgEl('text', Object.assign({ x, y, class: 'buslabel' }, extra), W); t.textContent = txt;
+      if (comp) this.mystery.push({ comp, el: t, name: txt });
+      return t;
+    };
+    this.mystery = [];
+    // Bus interno
+    line([[15, 290], [700, 290]], 'bus', { id: 'w-int' });
+    label(20, 283, 'Bus interno de la CPU');
+    Object.keys(TAP).forEach(k => line(TAP[k], 'tap'));
+    // Buses externos
+    line(ROUTES['MAR>MEM'], 'bus bus-addr', { id: 'w-addr' });
+    label(560, 132, 'Bus de direcciones', 'ADDR');
+    line(ROUTES['MBR>MEM'], 'bus bus-data', { id: 'w-data' });
+    label(674, 222, 'Bus de datos', 'DATA', { 'font-size': '9' });
+    line(ROUTES['CTRL'], 'bus', { id: 'w-ctrl', style: 'stroke:#4a5a23' });
+    label(560, 37, 'Bus de control', 'CTRL');
+    this.el.ctrlText = svgEl('text', { x: 712, y: 62, class: 'buslabel sig', 'text-anchor': 'end', style: 'fill:var(--warn);font-size:11px' }, W);
+    // Rutas internas auxiliares
+    line(ROUTES['PC>INC>PC'], 'thin');
+    line(ROUTES['IR>MUX>PC'], 'thin');
+    line(ROUTES['IR>UC'], 'thin');
+    line(ROUTES['R1>ALUA'], 'thin');
+    line(ROUTES['R2>ALUB'], 'thin');
+    label(300, 444, 'operando A', null, { style: 'font-size:9px' });
+    label(300, 476, 'operando B', null, { style: 'font-size:9px' });
+    label(170, 96, 'IR.dir', null, { style: 'font-size:9px' });
+    // Líneas de control (conceptuales)
+    this.el.cAlu = line(ROUTES['CTRL_ALU'], 'ctrlw sig');
+    this.el.cMux = line(ROUTES['CTRL_MUX'], 'ctrlw sig');
+    label(550, 160, 'ALU_OP', null, { class: 'buslabel sig', style: 'font-size:9px;fill:#9fae6a' });
+    // Hit areas (para soltar etiquetas sobre los buses en el nivel 1)
+    const C = this.L.comps;
+    [['ADDR', ROUTES['MAR>MEM']], ['DATA', ROUTES['MBR>MEM']], ['CTRL', ROUTES['CTRL']]].forEach(([c, p]) =>
+      svgEl('polyline', { points: pts2str(p), class: 'hit', 'data-comp': c }, C));
+
+    // Registros
+    ['PC', 'IR', 'MAR', 'MBR', 'R1', 'R2', 'R3'].forEach(n => this.regComp(n));
+    // Incrementador y selector (multiplexor) de entrada del PC
+    svgEl('circle', { cx: 62, cy: 80, r: 13, fill: '#0f2742', stroke: '#2c5d8f', 'stroke-width': 2 }, C);
+    const it = svgEl('text', { x: 62, y: 84, class: 'sub2', 'text-anchor': 'middle', style: 'fill:#9fe8c0;font-weight:700' }, C); it.textContent = '+I';
+    const mux = svgEl('g', { class: 'mux', id: 'mux' }, C);
+    svgEl('polygon', { points: '40,118 130,118 118,150 52,150' }, mux);
+    this.el.muxIn0 = svgEl('text', { x: 62, y: 130, class: 'muxin' }, mux); this.el.muxIn0.textContent = '+I';
+    this.el.muxIn1 = svgEl('text', { x: 108, y: 130, class: 'muxin' }, mux); this.el.muxIn1.textContent = 'dir';
+    this.el.muxSel = svgEl('text', { x: 85, y: 145 }, mux); this.el.muxSel.textContent = 'SEL PC';
+    // ALU
+    const alu = svgEl('g', { class: 'comp', id: 'comp-ALU', 'data-comp': 'ALU' }, C);
+    svgEl('polygon', { class: 'box', points: '430,320 590,350 590,400 430,430 430,390 450,375 430,360' }, alu);
+    const at = svgEl('text', { x: 520, y: 362, class: 'title', 'text-anchor': 'middle' }, alu); at.textContent = 'ALU';
+    this.mystery.push({ comp: 'ALU', el: at, name: 'ALU' });
+    this.el.aluOp = svgEl('text', { x: 520, y: 378, class: 'sub2', 'text-anchor': 'middle' }, alu);
+    const av = svgEl('text', { x: 520, y: 400, class: 'rval', style: 'font-size:16px' }, alu);
+    const ao = svgEl('text', { x: 520, y: 414, class: 'rold' }, alu);
+    this.el.ALU = { grp: alu, val: av, old: ao };
+    // Bandera Z
+    const zg = svgEl('g', { class: 'comp', id: 'comp-Z', transform: `translate(${G.Z.x},${G.Z.y})` }, C);
+    svgEl('rect', { class: 'box', width: G.Z.w, height: G.Z.h, rx: 6 }, zg);
+    const zn = svgEl('text', { x: 6, y: 13, class: 'rname' }, zg); zn.textContent = 'Flag Z';
+    const zv = svgEl('text', { x: G.Z.w / 2, y: 32, class: 'rval', style: 'font-size:15px' }, zg);
+    this.el.Z = { grp: zg, val: zv, old: svgEl('text', {}, zg) };
+    // Unidad de Control
+    const uc = svgEl('g', { class: 'comp', id: 'comp-UC', 'data-comp': 'UC', transform: `translate(${G.UC.x},${G.UC.y})` }, C);
+    svgEl('rect', { class: 'box', width: G.UC.w, height: G.UC.h, rx: 10 }, uc);
+    const ut = svgEl('text', { x: 10, y: 18, class: 'title' }, uc); ut.textContent = 'Unidad de Control (UC)';
+    this.mystery.push({ comp: 'UC', el: ut, name: 'Unidad de Control (UC)' });
+    this.el.uc1 = svgEl('text', { x: 10, y: 35, class: 'sub' }, uc);
+    this.el.uc2 = svgEl('text', { x: 10, y: 50, class: 'sub2' }, uc);
+    this.el.UC = { grp: uc };
+    this.el.lamps = {};
+    LAMPS.forEach((k, i) => {
+      const lg = svgEl('g', { class: 'lamp sig', transform: `translate(${7 + (i % 5) * 58},${i < 5 ? 58 : 80})` }, uc);
+      svgEl('rect', { width: 54, height: 17, rx: 3 }, lg);
+      const lt = svgEl('text', { x: 27, y: 12 }, lg); lt.textContent = k;
+      this.el.lamps[k] = { g: lg, t: lt };
+    });
+    const st = svgEl('text', { x: 290, y: 18, class: 'sub2', 'text-anchor': 'end' }, uc); st.textContent = 'señales de control';
+    st.classList.add('sig');
+    // Memoria
+    const mg = svgEl('g', { class: 'comp', id: 'comp-MEM', 'data-comp': 'MEM' }, C);
+    this.el.memRect = svgEl('rect', { class: 'box', x: G.MEM.x, y: G.MEM.y, width: G.MEM.w, height: 300, rx: 10 }, mg);
+    const mt = svgEl('text', { x: G.MEM.x + 10, y: G.MEM.y + 20, class: 'title' }, mg); mt.textContent = 'Memoria principal';
+    this.mystery.push({ comp: 'MEM', el: mt, name: 'Memoria principal' });
+    const mh = svgEl('text', { x: G.MEM.x + 10, y: G.MEM.y + 36, class: 'sub2' }, mg); mh.textContent = 'dir.     contenido';
+    this.el.memRows = svgEl('g', {}, mg);
+    this.el.MEM = { grp: mg };
+    // Leyenda
+    const lg = svgEl('g', { transform: 'translate(20,500)' }, C);
+    [['var(--cyan)', 'dato'], ['var(--addr)', 'dirección'], ['#ffb36b', 'operando/opcode'], ['#9fe8c0', 'incremento'], ['var(--warn)', 'señal activa']].forEach(([c, t], i) => {
+      svgEl('rect', { x: i * 118, y: 0, width: 14, height: 10, rx: 3, fill: c }, lg);
+      const tx = svgEl('text', { x: i * 118 + 19, y: 9, class: 'sub2' }, lg); tx.textContent = t;
+    });
+    this.el.phaseTxt = svgEl('text', { x: 20, y: 540, class: 'sub', style: 'font-size:12px' }, C);
+
+    svg.addEventListener('click', e => {
+      const t = e.target.closest && e.target.closest('[data-comp]');
+      if (t && Game.lvl && Game.lvl.onCompClick) Game.lvl.onCompClick(t.dataset.comp);
+    });
+  },
+  regComp(n) {
+    const g = G[n];
+    const grp = svgEl('g', { class: 'comp reg', id: 'comp-' + n, 'data-comp': n, transform: `translate(${g.x},${g.y})` }, this.L.comps);
+    svgEl('rect', { class: 'box', width: g.w, height: g.h, rx: 8 }, grp);
+    const names = { PC: 'PC', IR: 'IR', MAR: 'MAR', MBR: 'MBR', R1: 'R1', R2: 'R2', R3: 'R3' };
+    const nm = svgEl('text', { class: 'rname', x: 8, y: 15 }, grp); nm.textContent = names[n];
+    this.mystery.push({ comp: n, el: nm, name: names[n] });
+    const v = svgEl('text', { class: 'rval', x: g.w / 2, y: g.h / 2 + 10 }, grp);
+    const o = svgEl('text', { class: 'rold', x: g.w / 2, y: g.h - 4 }, grp);
+    this.el[n] = { grp, val: v, old: o };
+  },
+  /** Construye las filas visibles de memoria para el nivel */
+  buildMem(view) {
+    this.memView = view;
+    const R = this.el.memRows; R.innerHTML = '';
+    this.el.rows = {};
+    view.forEach((a, i) => {
+      const y = G.MEM.y + 44 + i * 30;
+      const g = svgEl('g', { class: 'mrow', id: 'mem-' + a }, R);
+      svgEl('rect', { x: G.MEM.x + 5, y, width: G.MEM.w - 10, height: 26, rx: 4 }, g);
+      const ad = svgEl('text', { x: G.MEM.x + 11, y: y + 17, class: 'maddr' }, g); ad.textContent = a;
+      const vv = svgEl('text', { x: G.MEM.x + 48, y: y + 17, class: 'mval' }, g);
+      this.el.rows[a] = { g, val: vv, y };
+    });
+    this.el.memRect.setAttribute('height', Math.max(240, 52 + view.length * 30));
+  },
+  setVal(k, v) {
+    const e = this.el[k]; if (!e) return;
+    const t = fmt(v);
+    e.val.textContent = t;
+    e.val.classList.toggle('small', t.length > 6 && k !== 'Z');
+  },
+  showOld(k, v) {
+    const e = this.el[k]; if (!e || !e.old) return;
+    e.old.textContent = 'antes: ' + fmt(v);
+    e.old.classList.add('show');
+    clearTimeout(e.oldT);
+    e.oldT = setTimeout(() => e.old.classList.remove('show'), 2600 / Math.max(.5, Anim.speed));
+  },
+  setMem(a, v) { const r = this.el.rows[a]; if (r) r.val.textContent = fmt(v); },
+  flash(el, cls) {
+    if (!el) return;
+    ['flash-chg', 'flash-ok', 'flash-err'].forEach(c => el.classList.remove(c));
+    void el.getBoundingClientRect();
+    el.classList.add(cls);
+    clearTimeout(el._ft);
+    el._ft = setTimeout(() => el.classList.remove(cls), 1700);
+  },
+  flashComp(comp, cls) {
+    if (comp === 'MEM') return this.flash(this.el.MEM.grp, cls === 'err' ? 'flash-err' : 'flash-ok');
+    const map = { ADDR: 'w-addr', DATA: 'w-data', CTRL: 'w-ctrl' };
+    if (map[comp]) { this.glowTemp(comp === 'ADDR' ? 'MAR>MEM' : comp === 'DATA' ? 'MBR>MEM' : 'CTRL', cls === 'err' ? 'err' : 'ctrl', 1400); return; }
+    const e = this.el[comp]; if (!e) return;
+    this.flash(e.grp, cls === 'err' ? 'flash-err' : cls === 'ok' ? 'flash-ok' : 'flash-chg');
+  },
+  compCenter(comp) {
+    if (comp === 'ALU') return [510, 335];
+    if (comp === 'MEM') return [G.MEM.x + 84, G.MEM.y + 14];
+    if (comp === 'UC') return [340, 12];
+    const g = G[comp]; if (!g) return [450, 280];
+    return [g.x + g.w / 2, g.y - 6];
+  },
+  floatText(x, y, txt, cls = 'info') {
+    const t = svgEl('text', { x, y, class: 'float ' + cls }, this.L.fx);
+    t.textContent = txt;
+    setTimeout(() => t.remove(), 2300);
+  },
+  floatAt(comp, txt, cls) { const [x, y] = this.compCenter(comp); this.floatText(x, y, txt, cls); },
+  memRowFlash(a, cls, txt) {
+    const r = this.el.rows[a];
+    if (!r) { if (txt) this.floatAt('MEM', txt, cls === 'flash-err' ? 'err' : 'ok'); return; }
+    this.flash(r.g, cls);
+    if (txt) this.floatText(G.MEM.x + 84, r.y - 2, txt, cls === 'flash-err' ? 'err' : 'ok');
+  },
+  glowRoute(key, bus) {
+    const cls = bus === 'err' ? '' : 'g-' + bus;
+    const p = svgEl('polyline', { points: pts2str(this.route(key)), class: 'route-glow ' + cls }, this.L.glow);
+    if (bus === 'err') p.style.stroke = 'var(--err)';
+    return p;
+  },
+  glowTemp(key, bus, ms) { const p = this.glowRoute(key, bus); setTimeout(() => p.remove(), ms); },
+  token(val, bus) {
+    const t = fmt(val);
+    const w = Math.max(30, t.length * 7.4 + 14);
+    const g = svgEl('g', { class: 'token tok-' + bus }, this.L.tokens);
+    svgEl('rect', { x: -w / 2, y: -11, width: w, height: 22, rx: 11 }, g);
+    const tx = svgEl('text', { x: 0, y: 4 }, g); tx.textContent = t;
+    return g;
+  },
+  place(g, pts, p) { const [x, y] = pointAt(pts, p); g.setAttribute('transform', `translate(${x},${y})`); },
+  setSignals(sigs) {
+    const keys = sigs.map(s => s.startsWith('ALU_OP') ? 'ALU_OP' : s);
+    LAMPS.forEach(k => this.el.lamps[k].g.classList.toggle('on', keys.includes(k)));
+    const alu = sigs.find(s => s.startsWith('ALU_OP'));
+    this.el.lamps.ALU_OP.t.textContent = alu ? alu.replace('ALU_OP=', 'ALU:') : 'ALU_OP';
+    const mem = sigs.includes('MEM_READ') ? 'READ' : sigs.includes('MEM_WRITE') ? 'WRITE' : '';
+    this.el.ctrlText.textContent = mem;
+    $('#w-ctrl').style.stroke = mem ? 'var(--warn)' : '#4a5a23';
+    this.el.cAlu.classList.toggle('on', !!alu);
+    this.el.cMux.classList.toggle('on', sigs.includes('PC_LOAD'));
+  },
+  setMux(mode) {
+    this.el.muxIn0.classList.toggle('sel', mode === 'inc');
+    this.el.muxIn1.classList.toggle('sel', mode === 'dir');
+    this.el.muxSel.textContent = mode === 'hold' ? 'PC_LOAD=0' : mode === 'dir' ? 'SEL=dir' : mode === 'inc' ? 'SEL=+I' : 'SEL PC';
+    this.el.muxSel.style.fill = mode ? 'var(--warn)' : '';
+  },
+  ucLines(s) {
+    if (s.halted) { this.el.uc1.textContent = 'Estado: CPU DETENIDA (HALT)'; this.el.uc2.textContent = 'No se buscan más instrucciones'; }
+    else if (s.decoded) {
+      this.el.uc1.textContent = `Decodificado: ${s.decoded.op} · opcode ${s.decoded.code}`;
+      this.el.uc2.textContent = 'Ejecución: ' + (EXEC_SIGNALS[s.decoded.op] || []).join(', ');
+    } else { this.el.uc1.textContent = 'Esperando instrucción…'; this.el.uc2.textContent = 'Fase actual: ' + s.phase; }
+    this.el.UC.grp.classList.toggle('halted', s.halted);
+    this.el.aluOp.textContent = s.aluOp ? 'operación: ' + s.aluOp : 'en reposo';
+  },
+  pointers(s) {
+    Object.keys(this.el.rows || {}).forEach(a => {
+      const r = this.el.rows[a];
+      r.g.classList.toggle('pc-ptr', String(s.reg.PC) === a);
+      r.g.classList.toggle('mar-ptr', String(s.reg.MAR) === a);
+      r.g.classList.remove('access');
+    });
+  },
+  /** Redibuja todo a partir del modelo, sin animaciones (reinicio / retroceso) */
+  renderAll() {
+    const s = Engine.s;
+    ['PC', 'IR', 'MAR', 'MBR', 'R1', 'R2', 'R3', 'ALU', 'Z'].forEach(k => { this.setVal(k, s.reg[k]); if (this.el[k].old) this.el[k].old.classList.remove('show'); });
+    this.memView.forEach(a => this.setMem(a, s.mem[a]));
+    this.pointers(s);
+    this.setSignals(s.signals);
+    this.setMux(null);
+    this.ucLines(s);
+    this.el.phaseTxt.textContent = `Fase: ${s.phase}   ·   Ciclo t${s.cycles}   ·   ${s.halted ? 'CPU detenida' : 'CPU activa'}`;
+    this.L.tokens.innerHTML = ''; this.L.glow.innerHTML = '';
+  },
+  /** Escritura de resultados en los componentes tras las transferencias */
+  commit(res) {
+    const a = res.after, b = res.before;
+    res.changed.forEach(k => {
+      this.setVal(k, a.reg[k]);
+      if (k !== 'Z') this.showOld(k, b.reg[k]);
+      this.flash(this.el[k].grp, 'flash-chg');
+    });
+    res.memChanged.forEach(ad => {
+      this.setMem(ad, a.mem[ad]);
+      this.memRowFlash(ad, 'flash-ok', `Memoria[${ad}] ← ${fmt(a.mem[ad])}`);
+    });
+    if (res.flags.noWrite) this.memRowFlash(b.reg.MAR, 'flash-err', '✗ sin MEM_WRITE: no se guardó');
+    if (res.flags.holdPC) { this.flash(this.el.PC.grp, 'flash-ok'); this.floatAt('PC', `PC conserva ${a.reg.PC}`, 'ok'); }
+    if (res.decodedChanged && a.decoded) { this.flash(this.el.UC.grp, 'flash-chg'); }
+    if (res.haltedChanged) { this.flash(this.el.UC.grp, 'flash-err'); this.floatAt('UC', 'HALT: CPU detenida', 'info'); }
+    this.pointers(a);
+    this.ucLines(a);
+    this.el.phaseTxt.textContent = `Fase: ${a.phase}   ·   Ciclo t${a.cycles}   ·   ${a.halted ? 'CPU detenida' : 'CPU activa'}`;
+  },
+  /** Anima un ciclo: 1) señales de control  2) transferencias de datos  3) escritura */
+  animateStep(res) {
+    const T_CTRL = 450, T_STAGE = 950, T_COMMIT = 650;
+    const tracks = [];
+    tracks.push({ t0: 0, t1: T_CTRL, start: () => {
+      this.L.tokens.innerHTML = ''; this.L.glow.innerHTML = '';
+      this.setSignals(res.after.signals);
+      this.setMux(res.flags.mux);
+      this.el.UC.grp.classList.add('active');
+      this.el.phaseTxt.textContent = `Fase: ${res.after.phase}   ·   Ciclo t${res.after.cycles}   ·   UC activando señales…`;
+    }, end: () => this.el.UC.grp.classList.remove('active') });
+    res.stages.forEach((st, i) => st.forEach(tr => {
+      let tok, glow; const pts = this.route(tr.route);
+      tracks.push({
+        t0: T_CTRL + i * T_STAGE, t1: T_CTRL + (i + 1) * T_STAGE,
+        start: () => { glow = this.glowRoute(tr.route, tr.bus); tok = this.token(tr.val, tr.bus); this.place(tok, pts, 0); },
+        update: p => this.place(tok, pts, ease(p)),
+        end: () => {
+          tok && tok.remove(); glow && glow.remove();
+          if (tr.route === 'MAR>MEM') { const r = this.el.rows[res.before.reg.MAR]; r && r.g.classList.add('access'); }
+        }
+      });
+    }));
+    const tc = T_CTRL + res.stages.length * T_STAGE;
+    tracks.push({ t0: tc, t1: tc + T_COMMIT, start: () => this.commit(res) });
+    return Anim.run(tracks);
+  },
+  setMystery(on, revealedComps = []) {
+    this.mystery.forEach(m => {
+      const show = !on || revealedComps.includes(m.comp);
+      m.el.textContent = show ? m.name : '?';
+    });
+    ['PC', 'IR', 'MAR', 'MBR', 'R1', 'R2', 'R3', 'ALU', 'UC', 'MEM'].forEach(c => {
+      const e = this.el[c]; if (e && e.grp) e.grp.classList.toggle('revealed', on && revealedComps.includes(c));
+    });
+  },
+  successBurst() {
+    const b = $('#burst'); b.innerHTML = '';
+    b.appendChild(h('div', { class: 'ring' }));
+    b.appendChild(h('div', { class: 'msg' }, '✓ ¡Nivel superado!'));
+    const cols = ['#3ddc84', '#4fd1ff', '#ffd23f', '#ffffff'];
+    for (let i = 0; i < 36; i++) {
+      const p = h('i'); const ang = Math.random() * Math.PI * 2, d = 120 + Math.random() * 220;
+      p.style.background = cols[i % 4];
+      p.style.setProperty('--dx', Math.cos(ang) * d + 'px'); p.style.setProperty('--dy', Math.sin(ang) * d + 'px');
+      b.appendChild(p);
+    }
+    b.classList.add('show');
+    setTimeout(() => b.classList.remove('show'), 1700);
+  }
+};
+
+/* =====================================================================
+   4. SIMULADOR: pasos, plan programado, instantáneas y retroceso
+   ===================================================================== */
+const Sim = {
+  history: [], plan: [], busy: false, playing: true,
+  clear() { this.history = []; this.plan = []; this.busy = false; this.playing = true; Anim.paused = false; },
+  snapshot() { return { cpu: clone(Engine.s), lvl: clone(Game.lvl.state || {}), plan: clone(this.plan) }; },
+  /** Ejecuta un paso solicitado por el estudiante */
+  exec(mops, tag) {
+    if (this.busy) { UI.toast('Espera a que termine la animación en curso.'); return Promise.resolve(null); }
+    return this._run(mops, tag, this.snapshot());
+  },
+  async _run(mops, tag, snap) {
+    let res;
+    try { res = Engine.step(mops); }
+    catch (e) { UI.feedback('err', 'Operaciones incompatibles', e.message); return null; }
+    this.busy = true;
+    this.history.push(snap);
+    Anim.paused = false;
+    UI.controls();
+    UI.history(`t${res.after.cycles}: ${res.after.lastMop}` + (res.after.signals.length ? `  [${res.after.signals.join(', ')}]` : ''), 'mop');
+    UI.refresh(true);
+    await Renderer.animateStep(res);
+    this.busy = false;
+    UI.refresh();
+    if (Game.lvl && Game.lvl.afterStep) Game.lvl.afterStep(tag || null, res);
+    UI.controls();
+    if (this.playing) this.kick();
+    return res;
+  },
+  /** Ejecuta el siguiente paso del plan si se está reproduciendo */
+  kick() {
+    if (this.busy || !this.playing || !this.plan.length) return;
+    const snap = this.snapshot();
+    const it = this.plan.shift();
+    this._run(it.mops, it.tag, snap);
+  },
+  play() { this.playing = true; Anim.paused = false; this.kick(); UI.controls(); },
+  pause() { this.playing = false; Anim.paused = true; UI.controls(); },
+  next() {
+    if (this.busy) { Anim.paused = false; Anim.skip(); return; }
+    if (this.plan.length) {
+      const snap = this.snapshot(); const it = this.plan.shift();
+      this.playing = false;
+      this._run(it.mops, it.tag, snap);
+    } else UI.toast('No hay microoperaciones programadas: realiza la siguiente acción desde el panel izquierdo.');
+  },
+  undo(silent) {
+    if (this.busy) { UI.toast('Espera a que termine la animación para retroceder.'); return false; }
+    const snap = this.history.pop();
+    if (!snap) { if (!silent) UI.toast('No hay pasos anteriores que restaurar.'); return false; }
+    Engine.s = snap.cpu; Game.lvl.state = snap.lvl; this.plan = snap.plan; this.playing = false;
+    Renderer.renderAll();
+    if (Game.lvl.refresh) Game.lvl.refresh();
+    UI.refresh(); UI.controls();
+    if (!silent) UI.history('↶ Retroceso: estado anterior restaurado', 'info');
+    return true;
+  }
+};
+
+/* =====================================================================
+   5. INTERFAZ: paneles, retroalimentación, historial, estadísticas
+   ===================================================================== */
+const UI = {
+  init() {
+    $('#cPlay').onclick = () => Sim.play();
+    $('#cPause').onclick = () => Sim.pause();
+    $('#cNext').onclick = () => Sim.next();
+    $('#cBack').onclick = () => Sim.undo();
+    $('#cReset').onclick = () => { if (Sim.busy) { Anim.skip(); return UI.toast('Animación completada; pulsa Reiniciar de nuevo.'); } Game.load(Game.lvlId, true); };
+    $('#cSpeed').oninput = e => { Anim.speed = +e.target.value; $('#cSpeedV').textContent = e.target.value + '×'; };
+    $('#cSignals').onchange = e => document.body.classList.toggle('hide-signals', !e.target.checked);
+    $('#mGuided').onclick = () => Game.setMode('guiado');
+    $('#mChallenge').onclick = () => Game.setMode('desafio');
+    $('#btnCheck').onclick = () => { if (Sim.busy) return UI.toast('Espera a que termine la animación.'); Game.lvl.check(); };
+    $('#btnHint').onclick = () => Game.hint();
+    $('#btnResults').onclick = () => UI.results();
+    $('#btnHelp').onclick = () => UI.help();
+    $('#pipeline').innerHTML = PHASES.map(p => `<span data-p="${p}">${p}</span>`).join('');
+  },
+  refresh(running) {
+    const s = Engine.s; if (!s) return;
+    $('#sPhase').textContent = s.phase;
+    $('#sState').textContent = s.halted ? 'DETENIDA (HALT)' : (running || Sim.busy ? 'Ejecutando…' : 'En espera');
+    $('#sCycles').textContent = s.cycles;
+    $('#sMop').textContent = s.lastMop;
+    $('#sMopWhy').textContent = s.lastWhy || '';
+    $('#sSignals').innerHTML = s.signals.length ? s.signals.map(x => `<span class="sigchip">${x}</span>`).join('') : '<span class="sigchip none">ninguna señal activa</span>';
+    document.querySelectorAll('#pipeline span').forEach(e => e.classList.toggle('on', e.dataset.p === s.phase));
+    const prev = this._prevRegs || {};
+    $('#sRegs').innerHTML = ['PC', 'IR', 'MAR', 'MBR', 'R1', 'R2', 'R3', 'ALU', 'Z'].map(k =>
+      `<div class="${!running && prev[k] !== undefined && prev[k] !== fmt(s.reg[k]) ? 'chg' : ''}" title="${fmt(s.reg[k])}"><b>${k}</b>${fmt(s.reg[k])}</div>`).join('');
+    if (!running) { this._prevRegs = {}; Object.keys(s.reg).forEach(k => this._prevRegs[k] = fmt(s.reg[k])); }
+  },
+  controls() {
+    $('#cPlay').classList.toggle('on', Sim.playing && !Anim.paused);
+    $('#cPause').classList.toggle('on', Anim.paused || !Sim.playing);
+    $('#cBack').disabled = Sim.busy || !Sim.history.length;
+    $('#cNext').disabled = !Sim.busy && !Sim.plan.length;
+  },
+  feedback(type, title, html) {
+    const f = $('#feedback');
+    f.className = 'feedback ' + type;
+    f.innerHTML = `<div class="ft">${title}</div>${html || ''}`;
+  },
+  history(text, type = 'info') {
+    const ul = $('#history');
+    ul.insertBefore(h('li', { class: type }, text), ul.firstChild);
+    while (ul.children.length > 80) ul.removeChild(ul.lastChild);
+  },
+  toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(this._tt); this._tt = setTimeout(() => t.classList.remove('show'), 2600);
+  },
+  stats() {
+    const L = Store.data.levels, cur = L[Game.lvlId];
+    const all = Object.values(L);
+    const passed = all.filter(l => l.passed).length;
+    const att = all.reduce((a, l) => a + l.attempts, 0), err = all.reduce((a, l) => a + l.errors, 0), hin = all.reduce((a, l) => a + l.hints, 0);
+    const ft = all.reduce((a, l) => a + l.firstTotal, 0), fo = all.reduce((a, l) => a + l.firstOk, 0);
+    const t = cur.time + (cur.passed ? 0 : (Date.now() - Game.t0));
+    const mm = Math.floor(t / 60000), ss = Math.floor(t / 1000) % 60;
+    $('#stats').innerHTML = `
+      <div><b>${Game.lvlId}</b>nivel</div><div><b>${passed}/6</b>superados</div>
+      <div><b>${att}</b>intentos</div><div><b>${err}</b>errores</div>
+      <div><b>${hin}</b>pistas</div><div><b>${Store.data.xp}</b>puntos</div>
+      <div><b>${ft ? Math.round(100 * fo / ft) : 0}%</b>1er intento</div><div><b>${mm}:${String(ss).padStart(2, '0')}</b>tiempo</div>`;
+    $('#xpTotal').textContent = Store.data.xp;
+  },
+  tabs() {
+    const T = $('#tabs'); T.innerHTML = '';
+    const icon = { pendiente: '○', incorrecto: '✗', superado: '✓' };
+    for (let i = 1; i <= 6; i++) {
+      const st = Store.data.levels[i]; const un = Game.unlocked(i);
+      T.appendChild(h('button', { class: 'tab' + (i === Game.lvlId ? ' cur' : ''), disabled: un ? false : 'disabled', title: LEVELS[i].name, onclick: () => Game.load(i) },
+        [h('span', { class: 'st-' + st.status }, un ? icon[st.status] : '🔒'), `N${i} ${LEVELS[i].short}`]));
+    }
+  },
+  modal(html, buttons = [{ text: 'Cerrar' }]) {
+    const box = $('#modalBox'); box.innerHTML = html;
+    const act = h('div', { class: 'actions' });
+    buttons.forEach(b => act.appendChild(h('button', { class: 'btn ' + (b.cls || ''), onclick: () => { $('#modal').classList.remove('show'); b.fn && b.fn(); } }, b.text)));
+    box.appendChild(act);
+    $('#modal').classList.add('show');
+  },
+  help() {
+    this.modal(`<h2>CPU Quest · Cómo se juega</h2>
+      <p>Eres el diseñador de la <b>Unidad de Control</b> de un procesador didáctico. Cada decisión que tomas (señales, microoperaciones, orden) se ejecuta en el <b>modelo real</b> de la CPU y se anima en el diagrama central.</p>
+      <ul>
+        <li><b>Colores</b>: celeste = datos, lila = direcciones, naranja = operandos/opcode, amarillo = componente o señal activa, verde = correcto, rojo = error.</li>
+        <li>Cuando un registro cambia, se ilumina y muestra <i>antes: valor anterior</i>.</li>
+        <li><b>Controles</b>: ▶ reproduce los pasos programados, ⏸ pausa (sin perder el estado), ⏭ avanza una microoperación, ⏮ restaura el estado anterior, ⟲ reinicia el nivel.</li>
+        <li><b>Modo guiado</b>: pistas disponibles. <b>Modo desafío</b>: sin pistas, +50% de puntos.</li>
+        <li><code>I</code> es la longitud de la instrucción. En este procesador cada instrucción ocupa una posición de memoria, así que <code>I = 1</code>.</li>
+        <li>El progreso se guarda automáticamente en este navegador.</li>
+      </ul>
+      <p class="small-note">Basado en el modelo de microoperaciones del capítulo 19 (Funcionamiento de la unidad de control) de Stallings. Las señales son conceptuales.</p>
+      <p class="small-note">Creado por <b>${AUTHOR}</b></p>`);
+  },
+  results() {
+    const L = Store.data.levels;
+    const rows = Object.keys(L).map(i => {
+      const l = L[i]; const t = Math.round(l.time / 1000);
+      return `<tr><td>N${i} ${LEVELS[i].short}</td><td>${l.status}</td><td>${l.attempts}</td><td>${l.errors}</td><td>${l.hints}</td><td>${l.xp}</td><td>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</td></tr>`;
+    }).join('');
+    const all = Object.values(L);
+    const ft = all.reduce((a, l) => a + l.firstTotal, 0), fo = all.reduce((a, l) => a + l.firstOk, 0);
+    const conc = Object.entries(Store.data.concepts).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+    const passed = all.filter(l => l.passed).length;
+    const strong = Object.keys(CONCEPTS).filter(c => !Store.data.concepts[c] && all[CONCEPT_LEVEL[c] - 1].passed);
+    this.modal(`<h2>${passed === 6 ? '🏆 Resultado de aprendizaje' : 'Progreso actual'}</h2>
+      <p>Niveles superados: <b>${passed}/6</b> · Puntos: <b>${Store.data.xp}</b> · Aciertos al primer intento: <b>${ft ? Math.round(100 * fo / ft) : 0}%</b></p>
+      <table><tr><th>Nivel</th><th>Estado</th><th>Intentos</th><th>Errores</th><th>Pistas</th><th>XP</th><th>Tiempo</th></tr>${rows}</table>
+      <p class="small-note">El tiempo es sólo informativo: no penaliza la puntuación.</p>
+      <h3>Conceptos que conviene repasar</h3>
+      ${conc.length ? '<ul>' + conc.map(([c, n]) => `<li><b>${CONCEPTS[c].name}</b> (${n} error${n > 1 ? 'es' : ''}): ${CONCEPTS[c].tip}</li>`).join('') + '</ul>' : '<p>¡Ningún error registrado hasta ahora!</p>'}
+      ${strong.length ? '<h3>Conceptos dominados</h3><p>' + strong.map(c => CONCEPTS[c].name).join(' · ') + '</p>' : ''}
+      <p class="small-note">CPU Quest · Creado por <b>${AUTHOR}</b></p>`,
+      [{ text: 'Cerrar' }, { text: 'Borrar progreso', fn: () => { if (confirm('¿Borrar todo el progreso guardado? Esta acción no se puede deshacer.')) { Store.reset(); Game.load(1, true); } } }]);
+  }
+};
+
+/* =====================================================================
+   6. PROGRESO Y PERSISTENCIA
+   ===================================================================== */
+const CONCEPTS = {
+  componentes: { name: 'Componentes de la CPU', tip: 'Repasa la función de PC, IR, MAR, MBR, ALU, UC, registros y buses (estructura del procesador).' },
+  senales: { name: 'Señales de control', tip: 'Repasa qué señales activa la UC para cada instrucción y qué componente responde a cada una.' },
+  fetch: { name: 'Ciclo de búsqueda (FETCH)', tip: 't1: MAR ← PC · t2: MBR ← Memoria[MAR], PC ← PC + I · t3: IR ← MBR. Analiza por qué ese orden y qué puede ser simultáneo.' },
+  ejecucion: { name: 'Ciclo de ejecución', tip: 'Repasa las microoperaciones de LOAD, ADD, STORE y HALT y las dependencias entre ellas.' },
+  depuracion: { name: 'Consecuencias de señales erróneas', tip: 'Analiza qué ocurre si falta o sobra una señal: datos que no se guardan, registros corrompidos, operaciones equivocadas.' },
+  saltos: { name: 'Saltos condicionales', tip: 'Repasa el papel de la bandera Z, la señal PC_LOAD y por qué el PC ya contiene PC + I tras el FETCH.' }
+};
+const CONCEPT_LEVEL = { componentes: 1, senales: 2, fetch: 3, ejecucion: 4, depuracion: 5, saltos: 6 };
+const Store = {
+  key: 'cpuquest_uned_03306_v1', data: null,
+  blank() {
+    const lv = {};
+    for (let i = 1; i <= 6; i++) lv[i] = { status: 'pendiente', attempts: 0, errors: 0, hints: 0, correct: 0, time: 0, xp: 0, passed: false, firstTotal: 0, firstOk: 0 };
+    return { levels: lv, xp: 0, mode: 'guiado', concepts: {}, current: 1, seenIntro: false };
+  },
+  load() {
+    try { this.data = JSON.parse(localStorage.getItem(this.key)); } catch (e) { this.data = null; }
+    if (!this.data || !this.data.levels) this.data = this.blank();
+  },
+  save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) { } },
+  reset() { this.data = this.blank(); this.data.seenIntro = true; this.save(); }
+};
+
+/* =====================================================================
+   7. CONTROLADOR DEL JUEGO (evaluación, puntos, desbloqueo)
+   ===================================================================== */
+const Game = {
+  lvl: null, lvlId: 1, t0: Date.now(), seen: new Set(),
+  get guided() { return Store.data.mode === 'guiado'; },
+  unlocked(i) { return i === 1 || Store.data.levels[i - 1].passed; },
+  setMode(m) {
+    Store.data.mode = m; Store.save();
+    $('#mGuided').classList.toggle('on', m === 'guiado');
+    $('#mChallenge').classList.toggle('on', m === 'desafio');
+    $('#btnHint').disabled = m !== 'guiado';
+    UI.toast(m === 'guiado' ? 'Modo aprendizaje guiado: pistas disponibles.' : 'Modo desafío: sin pistas, +50% de puntos.');
+  },
+  accTime() {
+    const st = Store.data.levels[this.lvlId];
+    if (!st.passed) st.time += Date.now() - this.t0;
+    this.t0 = Date.now();
+  },
+  load(id, force) {
+    if (!this.unlocked(id)) return UI.toast('Supera el nivel anterior para desbloquear éste.');
+    if (Sim.busy) { Anim.skip(); return UI.toast('Se ha completado la animación en curso; vuelve a pulsar.'); }
+    if (this.lvl) this.accTime();
+    this.lvlId = id; Store.data.current = id; Store.save();
+    this.lvl = LEVELS[id];
+    this.lvl.state = {};
+    Sim.clear();
+    Renderer.setMystery(false);
+    Renderer.L.tokens.innerHTML = ''; Renderer.L.glow.innerHTML = '';
+    $('#lvlName').innerHTML = `${this.lvl.name} <span class="lvlstate ${Store.data.levels[id].status}">${Store.data.levels[id].status}</span>`;
+    $('#lvlObjective').innerHTML = '<b>Objetivo:</b> ' + this.lvl.objective;
+    $('#lvlInstr').innerHTML = this.lvl.instr;
+    $('#sLevel').textContent = 'N' + id + ' · ' + this.lvl.short;
+    $('#btnCheck').textContent = this.lvl.checkText || '✔ Comprobar';
+    this.lvl.setup();
+    UI.tabs(); UI.stats(); UI.refresh(); UI.controls();
+    UI.history(`▶ ${this.lvl.name}`, 'info');
+  },
+  /** Prepara la CPU para el nivel/reto */
+  prep(cfg, view) {
+    Engine.fresh(cfg);
+    Renderer.buildMem(view);
+    Renderer.renderAll();
+    UI.refresh();
+  },
+  graded(key, ok) {
+    const st = Store.data.levels[this.lvlId];
+    st.attempts++;
+    if (ok) st.correct++; else st.errors++;
+    const k = this.lvlId + ':' + key;
+    if (!this.seen.has(k)) { this.seen.add(k); st.firstTotal++; if (ok) st.firstOk++; }
+    Store.save(); UI.stats();
+  },
+  setStatus(s) {
+    const st = Store.data.levels[this.lvlId];
+    if (!st.passed) st.status = s;
+    $('#lvlName .lvlstate').className = 'lvlstate ' + st.status;
+    $('#lvlName .lvlstate').textContent = st.status;
+    UI.tabs();
+  },
+  /** Acción correcta */
+  ok(o) {
+    if (o.key) this.graded(o.key, true);
+    UI.feedback('ok', o.title, o.msg || '');
+    UI.history((o.title.startsWith('✓') ? '' : '✓ ') + o.title.replace(/<[^>]+>/g, ''), 'ok');
+  },
+  /** Acción incorrecta: se detiene, se resalta, se explica y se da una pista */
+  fail(o) {
+    Sim.playing = false; UI.controls();
+    if (o.key) this.graded(o.key, false);
+    Store.data.concepts[o.concept || this.lvl.concept] = (Store.data.concepts[o.concept || this.lvl.concept] || 0) + 1;
+    Store.save();
+    this.setStatus('incorrecto');
+    if (o.comp) { Renderer.flashComp(o.comp, 'err'); if (o.float) Renderer.floatAt(o.comp, o.float, 'err'); }
+    UI.feedback('err', o.title || 'Operación incorrecta',
+      o.msg + (this.guided && o.hint ? `<div class="hint">💡 Pista: ${o.hint}</div>` : '') +
+      `<div class="retry">Corrige la acción y vuelve a intentarlo: no necesitas reiniciar el nivel.</div>`);
+    UI.history(((o.title || '').startsWith('✗') ? '' : '✗ ') + (o.title || 'Error').replace(/<[^>]+>/g, ''), 'err');
+    UI.stats();
+  },
+  warn(title, msg) { UI.feedback('warn', title, msg); },
+  hint() {
+    if (!this.guided) return UI.toast('Modo desafío: las pistas están desactivadas.');
+    const st = Store.data.levels[this.lvlId];
+    st.hints++; Store.save(); UI.stats();
+    UI.feedback('warn', '💡 Pista', this.lvl.hint());
+    UI.history('💡 Pista consultada', 'info');
+  },
+  /** Misión superada */
+  complete(o) {
+    const st = Store.data.levels[this.lvlId];
+    let gained = 0;
+    this.accTime();
+    if (!st.passed) {
+      gained = 100 + (st.errors === 0 ? 50 : 0) - 10 * st.hints;
+      gained = Math.max(40, gained);
+      if (Store.data.mode === 'desafio') gained = Math.round(gained * 1.5);
+      st.passed = true; st.xp = gained; Store.data.xp += gained;
+    }
+    st.status = 'superado';
+    Store.save();
+    this.setStatus('superado');
+    UI.stats(); UI.tabs();
+    Renderer.successBurst();
+    UI.feedback('ok', '✓ Misión superada', o.result);
+    UI.history(`🏁 ${this.lvl.name} superado`, 'ok');
+    const allDone = Object.values(Store.data.levels).every(l => l.passed);
+    const next = this.lvlId < 6 ? [{ text: `Siguiente nivel ▶`, cls: 'primary', fn: () => this.load(this.lvlId + 1) }] : [];
+    setTimeout(() => UI.modal(`<h2>✓ ${this.lvl.name}: ¡superado!</h2>
+      <p><b>Resultado:</b> ${o.result}</p>
+      ${o.signals ? `<p><b>Señales activadas:</b> ${o.signals.map(s => `<span class="sigchip">${s}</span>`).join(' ')}</p>` : ''}
+      <p><b>¿Por qué es correcto?</b> ${o.why}</p>
+      <p>${gained ? `Has ganado <b style="color:var(--warn)">+${gained} XP</b>` : 'Nivel repetido: los puntos ya se obtuvieron la primera vez.'}
+      · Errores: ${st.errors} · Pistas: ${st.hints}</p>
+      ${this.lvlId < 6 ? `<p>🔓 Nivel ${this.lvlId + 1} desbloqueado: <b>${LEVELS[this.lvlId + 1].name}</b></p>` : ''}`,
+      allDone ? [{ text: 'Ver resultado final 🏆', cls: 'ok', fn: () => UI.results() }, ...next, { text: 'Quedarme aquí' }] : [...next, { text: 'Quedarme aquí' }]), 1300);
+  }
+};
+
+/** Arrastrar y soltar con eventos de puntero (ratón y táctil). Un toque sin mover = clic. */
+const Drag = {
+  bind(el, { onDrop, onClick }) {
+    el.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const sx = e.clientX, sy = e.clientY; let ghost = null, moved = false, hover = null;
+      const move = ev => {
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) {
+          moved = true; ghost = h('div', { class: 'ghost' }, el.textContent); document.body.appendChild(ghost);
+        }
+        if (moved) {
+          ghost.style.left = ev.clientX + 12 + 'px'; ghost.style.top = ev.clientY + 12 + 'px';
+          const t = document.elementFromPoint(ev.clientX, ev.clientY);
+          const tg = t && t.closest ? t.closest('[data-comp],[data-slot]') : null;
+          if (tg !== hover) { hover && hover.classList.remove('drop-hover'); hover = tg; hover && hover.classList.add('drop-hover'); }
+        }
+      };
+      const up = ev => {
+        document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
+        hover && hover.classList.remove('drop-hover');
+        if (moved) { ghost.remove(); const t = document.elementFromPoint(ev.clientX, ev.clientY); onDrop && onDrop(t); }
+        else onClick && onClick();
+      };
+      document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+    });
+  }
+};
+
+/* =====================================================================
+   8. NIVELES (lógica de evaluación de cada misión)
+   ===================================================================== */
+const PROGRAM_MEM = {
+  0: INS.load('R1', 500), 1: INS.load('R2', 501), 2: INS.add('R3', 'R1', 'R2'), 3: INS.store('R3', 502), 4: INS.halt(),
+  500: 5, 501: 3, 502: 0
+};
+const tools = () => $('#tools');
+const toolTitle = t => h('h3', {}, t);
+
+/* ---------------- NIVEL 1: Conoce tu CPU ---------------- */
+const L1 = {
+  id: 1, short: 'Componentes', name: 'Nivel 1 · Conoce tu CPU', concept: 'componentes',
+  objective: 'Identifica los componentes del procesador arrastrando cada etiqueta sobre su bloque en el diagrama.',
+  instr: 'Arrastra cada etiqueta hasta el componente correcto (o tócala y después toca el componente). Los nombres aparecen como <b>“?”</b> hasta que los identifiques. Al acertar verás qué función cumple, con los valores reales de la CPU.',
+  labels: [
+    { id: 'UC', text: 'Unidad de Control', hint: 'Es el bloque que contiene las “lámparas” de señales de control.',
+      info: () => 'La UC interpreta el código de operación del IR y activa, en el orden correcto, las señales de control (MEM_READ, REG_WRITE…). Observa el bus de control que sale de ella hacia la memoria.',
+      demo: () => Renderer.glowTemp('CTRL', 'ctrl', 1800) },
+    { id: 'ALU', text: 'ALU', hint: 'Tiene forma de “V” y recibe dos operandos.',
+      info: () => 'La Unidad Aritmético-Lógica realiza las operaciones (ADD, SUB…) con los operandos que recibe de los registros. Su resultado actualiza banderas como Z.',
+      demo: () => { Renderer.glowTemp('R1>ALUA', 'op', 1800); Renderer.glowTemp('R2>ALUB', 'op', 1800); } },
+    { id: 'PC', text: 'PC · Contador de Programa', hint: 'Está conectado al incrementador “+I”.',
+      info: s => `El PC guarda la dirección de la <b>próxima</b> instrucción. Ahora vale <b>${s.reg.PC}</b>: la siguiente instrucción está en Memoria[${s.reg.PC}] = «${fmt(s.mem[s.reg.PC])}» (resaltada en la memoria).`,
+      demo: () => Renderer.memRowFlash(Engine.s.reg.PC, 'flash-ok', 'PC → Memoria[' + Engine.s.reg.PC + ']') },
+    { id: 'IR', text: 'IR · Registro de Instrucción', hint: 'Está conectado directamente a la UC para que ésta lo decodifique.',
+      info: s => `El IR contiene la instrucción que se está ejecutando; la UC lee su código de operación. Ahora vale «${fmt(s.reg.IR)}»: se llenará durante el FETCH.`,
+      demo: () => Renderer.glowTemp('IR>UC', 'dec', 1800) },
+    { id: 'MAR', text: 'MAR · Registro de Dirección de Memoria', hint: 'Es el registro del que sale el bus de direcciones.',
+      info: () => 'El MAR contiene la dirección de memoria a la que se quiere acceder y la entrega a la memoria por el bus de direcciones.',
+      demo: () => Renderer.glowTemp('MAR>MEM', 'addr', 1800) },
+    { id: 'MBR', text: 'MBR · Registro de Datos de Memoria', hint: 'Conecta con la memoria mediante el bus de datos.',
+      info: () => 'El MBR (o MDR) guarda el dato leído de memoria o el que se va a escribir. Es la “ventanilla” de datos entre la CPU y la memoria.',
+      demo: () => Renderer.glowTemp('MBR>MEM', 'data', 1800) },
+    { id: 'REGS', text: 'Registros generales R1–R3', targets: ['R1', 'R2', 'R3'], hint: 'Son tres registros iguales en la fila inferior.',
+      info: s => `Los registros generales guardan operandos y resultados; son la memoria más rápida de la CPU. Valores actuales: R1 = ${s.reg.R1}, R2 = ${s.reg.R2}, R3 = ${s.reg.R3}.`,
+      demo: () => ['R1', 'R2', 'R3'].forEach(r => Renderer.flashComp(r, 'ok')) },
+    { id: 'MEM', text: 'Memoria principal', hint: 'Está organizada por direcciones y contiene programa y datos.',
+      info: () => 'La memoria principal almacena las instrucciones (direcciones 0–4) y los datos (500–502). La CPU sólo accede a ella a través del MAR y el MBR.',
+      demo: () => Renderer.flashComp('MEM', 'ok') },
+    { id: 'ADDR', text: 'Bus de direcciones', hint: 'Une el MAR con la memoria.',
+      info: () => 'Lleva la dirección desde el MAR hasta la memoria. Es unidireccional: CPU → memoria.',
+      demo: () => Renderer.glowTemp('MAR>MEM', 'addr', 1800) },
+    { id: 'DATA', text: 'Bus de datos', hint: 'Une el MBR con la memoria.',
+      info: () => 'Transporta datos e instrucciones entre la memoria y el MBR, en ambos sentidos.',
+      demo: () => Renderer.glowTemp('MBR>MEM', 'data', 1800) },
+    { id: 'CTRL', text: 'Bus de control', hint: 'Sale de la Unidad de Control hacia la memoria.',
+      info: () => 'Transporta las señales de control (lectura, escritura…) desde la UC hacia la memoria y otros módulos.',
+      demo: () => Renderer.glowTemp('CTRL', 'ctrl', 1800) }
+  ],
+  tg(l) { return l.targets || [l.id]; },
+  setup() {
+    this.state = { found: [], sel: null };
+    Game.prep({ reg: { PC: 0 }, mem: PROGRAM_MEM }, [0, 1, 2, 3, 4, 500, 501, 502]);
+    Sim.playing = false;
+    this.refresh();
+    UI.feedback('info', 'Identifica los componentes', 'Arrastra la primera etiqueta. Pista visual: los buses también son destinos válidos.');
+  },
+  revealed() { return this.labels.filter(l => this.state.found.includes(l.id)).flatMap(l => this.tg(l)); },
+  refresh() {
+    Renderer.setMystery(true, this.revealed());
+    const T = tools(); T.innerHTML = '';
+    T.appendChild(toolTitle(`Etiquetas (${this.state.found.length}/${this.labels.length})`));
+    const wrap = h('div', { class: 'chips' });
+    this.labels.forEach(l => {
+      const found = this.state.found.includes(l.id);
+      const c = h('div', { class: 'chip' + (found ? ' done' : '') + (this.state.sel === l.id ? ' sel' : '') }, (found ? '✓ ' : '') + l.text);
+      if (!found) Drag.bind(c, {
+        onDrop: el => { const t = el && el.closest ? el.closest('[data-comp]') : null; if (t) this.attempt(l.id, t.dataset.comp); },
+        onClick: () => { this.state.sel = this.state.sel === l.id ? null : l.id; this.refresh(); }
+      });
+      wrap.appendChild(c);
+    });
+    T.appendChild(wrap);
+    T.appendChild(h('p', { class: 'small-note' }, this.state.sel ? 'Etiqueta seleccionada: ahora toca el componente en el diagrama.' : 'Consejo: también puedes tocar una etiqueta y luego el componente.'));
+  },
+  onCompClick(comp) { if (this.state.sel) this.attempt(this.state.sel, comp); },
+  attempt(id, comp) {
+    const l = this.labels.find(x => x.id === id);
+    if (this.state.found.includes(id)) return;
+    if (this.tg(l).includes(comp)) {
+      this.state.found.push(id); this.state.sel = null;
+      this.tg(l).forEach(c => Renderer.flashComp(c, 'ok'));
+      l.demo();
+      Game.ok({ key: 'l1-' + id, title: `✓ ${l.text}`, msg: l.info(Engine.s) + (this.state.found.length === this.labels.length ? '<div class="hint">¡Todos identificados! Pulsa «Comprobar».</div>' : '') });
+      this.refresh();
+    } else {
+      const owner = this.labels.find(x => this.state.found.includes(x.id) && this.tg(x).includes(comp));
+      Game.fail({ key: 'l1-' + id, title: `✗ «${l.text}» no va ahí`,
+        msg: owner ? `Ese bloque ya lo identificaste como <b>${owner.text}</b>.` : `El bloque marcado en rojo no es ${l.text}. Piensa en qué conexiones tiene ese componente.`,
+        hint: l.hint, comp });
+      this.state.sel = null; this.refresh();
+    }
+  },
+  check() {
+    const n = this.labels.length - this.state.found.length;
+    if (n > 0) return Game.warn('Aún no', `Te faltan ${n} componente(s) por identificar.`);
+    Game.complete({ result: `Has identificado los ${this.labels.length} componentes de la CPU y los tres buses del sistema.`,
+      why: 'Conocer qué hace cada bloque (PC → dirección de la próxima instrucción, MAR/MBR → interfaz con memoria, IR → instrucción en curso, UC → señales, ALU → operaciones) es la base para seguir las microoperaciones.' });
+  },
+  hint() {
+    const l = this.labels.find(x => !this.state.found.includes(x.id));
+    return l ? `<b>${l.text}</b>: ${l.hint}` : 'Ya identificaste todo: pulsa «Comprobar».';
+  }
+};
+
+/* ---------------- NIVEL 2: Activa las señales ---------------- */
+const SIG_COMP = { MEM_READ: 'MEM', MEM_WRITE: 'MEM', 'ALU_OP=ADD': 'ALU', PC_LOAD: 'PC', IR_LOAD: 'IR', HALT: 'UC' };
+const GENERIC_WRONG = {
+  MEM_READ: i => `${i.op} no necesita leer datos de memoria en este momento; MEM_READ sobrescribiría el MBR con Memoria[MAR].`,
+  MEM_WRITE: i => `${i.op} no escribe en memoria; MEM_WRITE alteraría Memoria[MAR] con el contenido del MBR.`,
+  REG_WRITE: i => `${i.op} no escribe ningún registro general; REG_WRITE corrompería un registro con lo que haya en el bus.`,
+  'ALU_OP=ADD': i => `${i.op} no realiza ninguna operación aritmética: la ALU no interviene.`,
+  PC_LOAD: i => `PC_LOAD cargaría una nueva dirección en el PC (un salto). ${i.op} no es un salto: el PC ya se incrementó en FETCH.`,
+  IR_LOAD: () => 'IR_LOAD sólo se usa en el FETCH (t3). Activarla ahora sobrescribiría la instrucción que se está ejecutando.',
+  HALT: i => `HALT detendría la CPU. ${i.op} debe ejecutarse y el programa continuar.`
+};
+const FLOW = { LOAD: 'memoria → MBR → registro', STORE: 'registro → MBR → memoria', ADD: 'registros → ALU → registro', HALT: 'ningún dato se mueve; sólo se detiene el ciclo' };
+const L2 = {
+  id: 2, short: 'Señales', name: 'Nivel 2 · Activa las señales', concept: 'senales',
+  objective: 'Relaciona cada instrucción con las señales de control que la UC debe activar durante su ejecución.',
+  instr: 'Pulsa las señales necesarias. Cada señal correcta se ejecuta en la CPU y verás qué componente responde. Una señal incorrecta detiene la simulación y se explica por qué. Cuando creas que está completa, pulsa «Comprobar».',
+  signals: ['MEM_READ', 'MEM_WRITE', 'REG_WRITE', 'ALU_OP=ADD', 'PC_LOAD', 'IR_LOAD', 'HALT'],
+  challenges: [
+    { ins: INS.load('R1', 500), cpu: { reg: { PC: 1, IR: INS.load('R1', 500), MAR: 500, MBR: INS.load('R1', 500) }, mem: { 500: 5, 501: 3, 502: 0 } },
+      note: 'El FETCH y el cálculo de dirección ya se hicieron: el MAR contiene 500. Falta traer el dato y guardarlo en R1.',
+      req: { MEM_READ: { mop: 'MBR_MEM' }, REG_WRITE: { mop: 'R1_MBR', needs: 'MEM_READ' } },
+      wrong: { MEM_WRITE: 'LOAD copia un dato <b>de</b> la memoria <b>a</b> un registro. MEM_WRITE haría lo contrario: Memoria[500] se sobrescribiría con el contenido del MBR (la palabra de instrucción) y el 5 se perdería.' },
+      why: 'LOAD R1,[500] necesita MEM_READ (la memoria entrega Memoria[500] = 5 al MBR) y REG_WRITE (el MBR se escribe en R1).' },
+    { ins: INS.store('R3', 502), cpu: { reg: { PC: 4, IR: INS.store('R3', 502), MAR: 502, MBR: 8, R1: 5, R2: 3, R3: 8, ALU: 8 }, mem: { 500: 5, 501: 3, 502: 0 } },
+      note: 'Ya se hicieron MAR ← IR.dir (MAR = 502) y MBR ← R3 (MBR = 8). Falta que la memoria guarde el dato.',
+      req: { MEM_WRITE: { mop: 'MEM_MBR' } },
+      wrong: { MEM_READ: 'MEM_READ cargaría Memoria[502] (0) en el MBR y borraría el 8 que queremos guardar.', REG_WRITE: 'STORE no modifica registros: copia un registro hacia la memoria.' },
+      why: 'STORE R3,[502] termina con MEM_WRITE: la memoria guarda el MBR (8) en la dirección del MAR (502).' },
+    { ins: INS.add('R3', 'R1', 'R2'), cpu: { reg: { PC: 3, IR: INS.add('R3', 'R1', 'R2'), MBR: INS.add('R3', 'R1', 'R2'), R1: 5, R2: 3, R3: 0 }, mem: { 500: 5, 501: 3, 502: 0 } },
+      note: 'R1 = 5 y R2 = 3 ya están cargados. La UC debe ordenar la suma y guardar el resultado en R3.',
+      req: { 'ALU_OP=ADD': { mop: 'ALU_ADD' }, REG_WRITE: { mop: 'R3_ALU', needs: 'ALU_OP=ADD' } },
+      wrong: { MEM_READ: 'ADD opera sólo con registros: no necesita leer la memoria.', MEM_WRITE: 'ADD no guarda nada en memoria; eso lo hará después STORE.' },
+      why: 'ADD R3,R1,R2 necesita ALU_OP = ADD (la ALU suma 5 + 3) y REG_WRITE (el resultado 8 se escribe en R3).' },
+    { ins: INS.halt(), cpu: { reg: { PC: 5, IR: INS.halt(), MBR: INS.halt(), R1: 5, R2: 3, R3: 8 }, mem: { 500: 5, 501: 3, 502: 8 } },
+      note: 'La UC acaba de decodificar HALT.',
+      req: { HALT: { mop: 'HALT' } },
+      wrong: { REG_WRITE: 'HALT no escribe ningún registro: con REG_WRITE se corrompería un registro con lo que hubiera en el bus.' },
+      why: 'HALT sólo activa la señal HALT: la UC detiene el ciclo de instrucción y no se mueve ningún dato.' }
+  ],
+  ch() { return this.challenges[this.state.ci]; },
+  setup() { this.state = { ci: 0, done: [], pending: [], passed: false }; this.loadChallenge(); },
+  loadChallenge() {
+    const c = this.ch();
+    Game.prep(Object.assign({ decoded: true }, c.cpu), [500, 501, 502]);
+    Sim.playing = false;
+    this.refresh();
+    UI.feedback('info', `Instrucción ${this.state.ci + 1}/4: ${c.ins.text}`, c.note);
+  },
+  refresh() {
+    const c = this.ch(), st = this.state, T = tools(); T.innerHTML = '';
+    T.appendChild(toolTitle(`Instrucción ${st.ci + 1} de ${this.challenges.length}`));
+    T.appendChild(h('div', { class: 'card mono', style: 'font-size:18px;text-align:center;color:var(--warn)' }, c.ins.text));
+    T.appendChild(h('p', { class: 'small-note' }, c.note));
+    T.appendChild(toolTitle('Señales de control disponibles'));
+    const g = h('div', { class: 'sigbtns' });
+    this.signals.forEach(sig => {
+      const cls = st.done.includes(sig) ? ' done' : st.pending.includes(sig) ? ' pend' : '';
+      const b = h('button', { class: 'sigbtn' + cls, disabled: st.passed ? 'disabled' : false, onclick: e => this.toggle(sig, e.currentTarget) }, sig);
+      g.appendChild(b);
+    });
+    T.appendChild(g);
+    T.appendChild(h('p', { class: 'small-note' }, 'Verde = ejecutada · Amarillo = correcta pero esperando a que su dato esté disponible.'));
+    if (st.passed) T.appendChild(h('button', { class: 'btn ok', style: 'margin-top:8px;width:100%', onclick: () => this.nextChallenge() },
+      st.ci < this.challenges.length - 1 ? 'Siguiente instrucción ▶' : 'Finalizar nivel ▶'));
+  },
+  toggle(sig, btn) {
+    const c = this.ch(), st = this.state;
+    if (Sim.busy) return UI.toast('Espera a que termine la animación.');
+    if (st.done.includes(sig) || st.pending.includes(sig)) return UI.toast(`${sig} ya está activada.`);
+    const key = `l2-${st.ci}-${sig}`;
+    if (!c.req[sig]) {
+      btn.classList.add('bad'); setTimeout(() => btn.classList.remove('bad'), 450);
+      const comp = sig === 'REG_WRITE' ? (c.ins.r || c.ins.rd || 'R1') : SIG_COMP[sig];
+      const s = Engine.s;
+      const preview = { MEM_WRITE: `✗ Memoria[${s.reg.MAR}] ← ${fmt(s.reg.MBR)}`, MEM_READ: `✗ MBR ← Memoria[${s.reg.MAR}]`, REG_WRITE: `✗ ${comp} se corrompería`,
+        'ALU_OP=ADD': '✗ ALU innecesaria', PC_LOAD: '✗ PC ← ¿dirección?', IR_LOAD: '✗ IR sobrescrito', HALT: '✗ CPU detenida' }[sig];
+      Game.fail({ key, title: `${sig} no corresponde a ${c.ins.op}`, msg: (c.wrong[sig] || GENERIC_WRONG[sig](c.ins)) + ' <br><i>La simulación se ha detenido: esta señal no se aplica.</i>',
+        hint: `Sigue el camino del dato en ${c.ins.op}: ${FLOW[c.ins.op]}.`, comp, float: preview });
+      return;
+    }
+    const r = c.req[sig];
+    Game.graded(key, true);
+    if (r.needs && !st.done.includes(r.needs)) {
+      st.pending.push(sig);
+      UI.feedback('warn', `${sig} es correcta… pero todavía no`, `La señal es necesaria para ${c.ins.op}, pero su dato aún no está disponible (depende de <b>${r.needs}</b>). Quedará pendiente y se ejecutará automáticamente en cuanto actives ${r.needs}.`);
+      this.refresh();
+      return;
+    }
+    this.fire(sig);
+  },
+  fire(sig) {
+    const r = this.ch().req[sig];
+    Sim.exec([r.mop], { l2: sig });
+  },
+  afterStep(tag) {
+    if (!tag || !tag.l2) return;
+    const st = this.state, c = this.ch();
+    st.done.push(tag.l2);
+    UI.feedback('ok', `✓ ${tag.l2}`, MOPS[c.req[tag.l2].mop].why);
+    const p = st.pending.find(x => c.req[x].needs && st.done.includes(c.req[x].needs));
+    this.refresh();
+    if (p) { st.pending = st.pending.filter(x => x !== p); this.refresh(); setTimeout(() => this.fire(p), 300); }
+  },
+  check() {
+    const c = this.ch(), st = this.state;
+    if (st.passed) return this.nextChallenge();
+    const missing = Object.keys(c.req).filter(k => !st.done.includes(k));
+    if (missing.length) {
+      return Game.fail({ key: `l2-${st.ci}-check`, title: 'La instrucción no se ha completado',
+        msg: `Con las señales activadas hasta ahora, ${c.ins.op} no termina su trabajo.`,
+        hint: `Falta${missing.length > 1 ? 'n' : ''}: ${missing.join(', ')}.`, comp: 'UC' });
+    }
+    st.passed = true;
+    Game.ok({ title: `✓ ${c.ins.text}: señales correctas`, msg: c.why });
+    this.refresh();
+  },
+  nextChallenge() {
+    if (this.state.ci < this.challenges.length - 1) {
+      this.state = { ci: this.state.ci + 1, done: [], pending: [], passed: false };
+      Sim.history = [];
+      this.loadChallenge();
+    } else Game.complete({ result: 'Has activado correctamente las señales de LOAD, STORE, ADD y HALT.', signals: ['MEM_READ', 'REG_WRITE', 'MEM_WRITE', 'ALU_OP=ADD', 'HALT'],
+      why: 'Cada instrucción mueve los datos por un camino distinto, y la UC sólo debe activar las señales de ese camino: LOAD lee memoria y escribe registro; STORE escribe memoria; ADD usa la ALU y escribe registro; HALT detiene el ciclo.' });
+  },
+  hint() {
+    const c = this.ch(), st = this.state;
+    const missing = Object.keys(c.req).filter(k => !st.done.includes(k) && !st.pending.includes(k));
+    return `Camino del dato en ${c.ins.op}: ${FLOW[c.ins.op]}. ` + (missing.length ? `Te falta activar: <b>${missing.join(', ')}</b>.` : 'Ya activaste todo lo necesario: pulsa «Comprobar».');
+  }
+};
+
+/* ---------------- NIVEL 3: Construye FETCH ---------------- */
+const L3_CARDS = { MAR_PC: 1, MBR_MEM: 2, PC_INC: 2, IR_MBR: 3, DECODE: 4 };
+const L3_NEED = { 1: 1, 2: 2, 3: 1, 4: 1 };
+const L3_WHY = {
+  MBR_MEM: () => 'La memoria lee la posición que indica el MAR, pero el MAR todavía no contiene la dirección guardada en el PC. Leer ahora traería un contenido equivocado.',
+  PC_INC: () => 'En t1 el PC está volcando su valor por el bus interno hacia el MAR. En este camino de datos no se modifica a la vez: el incremento se agrupa en t2, mientras la memoria lee (usa el incrementador, no el bus).',
+  IR_MBR: () => 'El MBR todavía no contiene la nueva instrucción: la lectura de memoria termina en t2. Copiar ahora llevaría al IR un valor antiguo.',
+  DECODE: () => 'La UC sólo puede decodificar cuando la instrucción ya está en el IR, es decir, después de t3.',
+  MAR_PC: () => 'MAR ← PC ya se ejecutó en t1.'
+};
+const L3 = {
+  id: 3, short: 'FETCH', name: 'Nivel 3 · Construye FETCH', concept: 'fetch',
+  objective: 'Ordena las microoperaciones del ciclo de búsqueda (FETCH) y observa cómo cambian PC, MAR, MBR e IR.',
+  instr: 'Arrastra cada microoperación a su intervalo de tiempo t1…t4 (o tócala y luego toca el intervalo). Cada intervalo correcto se ejecuta en la CPU. <b>t2 admite dos microoperaciones simultáneas.</b> I = 1 (cada instrucción ocupa una posición).',
+  initCPU() { Game.prep({ reg: { PC: 0 }, mem: { 0: INS.load('R1', 500), 1: INS.load('R2', 501), 500: 5 } }, [0, 1, 500]); },
+  setup() {
+    this.state = { placed: { 1: [], 2: [], 3: [], 4: [] }, sel: null, order: shuffle(Object.keys(L3_CARDS)), done: false, replay: false };
+    this.initCPU();
+    Sim.playing = true;
+    this.refresh();
+    UI.feedback('info', 'Ciclo de búsqueda', 'El PC vale 0: la instrucción a buscar está en Memoria[0]. ¿Qué debe ocurrir primero?');
+  },
+  cur() { for (let t = 1; t <= 4; t++) if (this.state.placed[t].length < L3_NEED[t]) return t; return 5; },
+  refresh() {
+    const st = this.state, T = tools(); T.innerHTML = '';
+    T.appendChild(toolTitle('Microoperaciones (desordenadas)'));
+    const wrap = h('div', { class: 'chips' });
+    const placedAll = Object.values(st.placed).flat();
+    st.order.filter(id => !placedAll.includes(id)).forEach(id => {
+      const c = h('div', { class: 'chip mono' + (st.sel === id ? ' sel' : '') }, MOPS[id].text.replace('DECODE (UC ← IR.opcode)', 'DECODE'));
+      Drag.bind(c, {
+        onDrop: el => { const s = el && el.closest ? el.closest('[data-slot]') : null; if (s) this.place(id, +s.dataset.slot); },
+        onClick: () => { st.sel = st.sel === id ? null : id; this.refresh(); }
+      });
+      wrap.appendChild(c);
+    });
+    if (!wrap.children.length) wrap.appendChild(h('span', { class: 'small-note' }, 'Todas colocadas.'));
+    T.appendChild(wrap);
+    T.appendChild(toolTitle('Línea de tiempo'));
+    const sl = h('div', { class: 'slots' });
+    const cur = this.cur();
+    for (let t = 1; t <= 4; t++) {
+      const s = h('div', { class: 'slot' + (t === cur ? ' cur' : '') + (st.placed[t].length === L3_NEED[t] ? ' full' : ''), 'data-slot': t,
+        onclick: () => { if (st.sel) this.place(st.sel, t); } }, [h('span', { class: 'tlabel' }, 't' + t)]);
+      st.placed[t].forEach(id => s.appendChild(h('span', { class: 'placed' }, MOPS[id].text.replace('DECODE (UC ← IR.opcode)', 'DECODE'))));
+      if (t === 2 && st.placed[2].length === 1) s.appendChild(h('span', { class: 'small-note' }, '+ falta otra simultánea'));
+      sl.appendChild(s);
+    }
+    T.appendChild(sl);
+    if (st.done) {
+      T.appendChild(h('button', { class: 'btn', style: 'margin-top:10px;width:100%', onclick: () => this.replay() }, '🔁 Ver de nuevo paso a paso'));
+      T.appendChild(h('p', { class: 'small-note' }, 'Tras pulsarlo usa ⏭ Siguiente para avanzar intervalo a intervalo, o ▶ Reproducir. ⏮ retrocede.'));
+    }
+  },
+  place(id, slot) {
+    const st = this.state;
+    if (Sim.busy) return UI.toast('Espera a que termine la animación.');
+    if (st.replay) return UI.toast('Estás en modo repetición; reinicia el nivel para volver a ordenar.');
+    const cur = this.cur();
+    st.sel = null;
+    if (slot !== cur) { this.refresh(); return UI.toast(slot > cur ? `Completa primero el intervalo t${cur}.` : `El intervalo t${slot} ya está completo.`); }
+    const key = `l3-${slot}-${st.placed[slot].length}`;
+    if (L3_CARDS[id] !== slot) {
+      Game.fail({ key, title: `«${MOPS[id].text.replace(' (UC ← IR.opcode)', '')}» no puede ir en t${slot}`, msg: L3_WHY[id](slot),
+        hint: this.hint(), comp: MOPS[id].comp, concept: 'fetch' });
+      return this.refresh();
+    }
+    st.placed[slot].push(id);
+    Game.graded(key, true);
+    if (st.placed[slot].length < L3_NEED[slot]) {
+      UI.feedback('warn', `Correcto: ${MOPS[id].text} va en t${slot}`, 'Este intervalo admite una segunda microoperación que no compite por los mismos recursos. ¿Cuál puede ocurrir a la vez?');
+      return this.refresh();
+    }
+    this.refresh();
+    // Se programa en el plan: si el estudiante retrocede, el intervalo vuelve a quedar pendiente (⏭ / ▶)
+    Sim.plan = [{ mops: st.placed[slot].slice(), tag: { l3: slot } }];
+    Sim.play();
+  },
+  afterStep(tag, res) {
+    if (!tag || !tag.l3) return;
+    const msgs = {
+      1: 'Fíjate: el valor del PC viajó por el bus interno y ahora el MAR contiene la dirección de la instrucción.',
+      2: 'Dos microoperaciones en el mismo ciclo: la memoria entregó la instrucción al MBR por el bus de datos y, en paralelo, el PC se incrementó (PC + I, con I = 1) usando el incrementador.',
+      3: 'La instrucción pasó del MBR al IR.',
+      4: `La UC identificó el opcode ${res.after.decoded ? res.after.decoded.op + ' (' + res.after.decoded.code + ')' : ''} y ya sabe qué señales activar: ${res.after.decoded ? EXEC_SIGNALS[res.after.decoded.op].join(', ') : ''}.`
+    };
+    if (this.state.replay) { UI.feedback('info', `Repetición t${tag.l3}`, msgs[tag.l3]); return; }
+    if (tag.l3 === 4) { this.state.done = true; Game.ok({ title: '✓ Ciclo FETCH completo', msg: msgs[4] + ' Pulsa «Comprobar» para validar la misión.' }); }
+    else UI.feedback('ok', `✓ t${tag.l3} ejecutado`, msgs[tag.l3]);
+    this.refresh();
+  },
+  replay() {
+    if (Sim.busy) return;
+    this.state.replay = true;
+    this.initCPU();
+    Sim.history = [];
+    Sim.plan = [{ mops: ['MAR_PC'], tag: { l3: 1 } }, { mops: ['MBR_MEM', 'PC_INC'], tag: { l3: 2 } }, { mops: ['IR_MBR'], tag: { l3: 3 } }, { mops: ['DECODE'], tag: { l3: 4 } }];
+    Sim.playing = false;
+    UI.controls();
+    UI.feedback('info', 'Modo repetición', 'CPU reiniciada a PC = 0. Pulsa ⏭ Siguiente para ejecutar un intervalo, o ▶ Reproducir para verlo todo.');
+  },
+  check() {
+    if (!this.state.done) return Game.warn('Aún no', `El ciclo de búsqueda no está completo: falta el intervalo t${this.cur()}.`);
+    Game.complete({ result: 'FETCH: t1 MAR ← PC · t2 MBR ← Memoria[MAR] ∥ PC ← PC + I · t3 IR ← MBR · t4 DECODE.', signals: ['MAR_LOAD', 'MEM_READ', 'MBR_LOAD', 'PC_INC', 'IR_LOAD'],
+      why: 'Cada microoperación depende de la anterior: la memoria necesita la dirección en el MAR; el IR necesita la instrucción en el MBR; la UC necesita la instrucción en el IR. El incremento del PC no usa el bus interno, por eso se solapa con la lectura en t2.' });
+  },
+  hint() {
+    const c = this.cur();
+    return { 1: 'Antes de leer la memoria, ésta necesita saber QUÉ dirección leer. ¿Qué registro alimenta el bus de direcciones?',
+      2: 'Con la dirección en el MAR, la memoria ya puede leer. Y mientras espera, ¿qué registro conviene actualizar para apuntar a la siguiente instrucción?',
+      3: 'La instrucción está en el MBR; ¿a qué registro debe pasar para que la UC la vea?',
+      4: 'Con la instrucción en el IR, ¿qué hace la Unidad de Control?', 5: 'El ciclo está completo: pulsa «Comprobar».' }[c];
+  }
+};
+
+/* ---------------- NIVEL 4: Ejecuta instrucciones ---------------- */
+const FETCH_G = [['MAR_PC'], ['MBR_MEM', 'PC_INC'], ['IR_MBR'], ['DECODE']];
+const L4_PROG = [
+  { ins: INS.load('R1', 500), exec: [['MAR_IRD'], ['MBR_MEM'], ['R1_MBR']] },
+  { ins: INS.load('R2', 501), exec: [['MAR_IRD'], ['MBR_MEM'], ['R2_MBR']] },
+  { ins: INS.add('R3', 'R1', 'R2'), exec: [['ALU_ADD'], ['R3_ALU']] },
+  { ins: INS.store('R3', 502), exec: [['MAR_IRD', 'MBR_R3'], ['MEM_MBR']] },
+  { ins: INS.halt(), exec: [['HALT']] }
+];
+const L4_PALETTE = {
+  'Búsqueda (FETCH)': ['MAR_PC', 'MBR_MEM', 'PC_INC', 'IR_MBR', 'DECODE'],
+  'Ejecución': ['MAR_IRD', 'R1_MBR', 'R2_MBR', 'R3_MBR', 'ALU_ADD', 'R3_ALU', 'MBR_R3', 'MEM_MBR', 'HALT']
+};
+const L4 = {
+  id: 4, short: 'Ejecución', name: 'Nivel 4 · Ejecuta instrucciones', concept: 'ejecucion',
+  objective: 'Ejecuta el programa completo eligiendo, paso a paso, las microoperaciones (y sus señales) que debe ordenar la UC.',
+  instr: 'Programa: <span class="mono">LOAD R1,[500] · LOAD R2,[501] · ADD R3,R1,R2 · STORE R3,[502] · HALT</span>. Valores iniciales: Memoria[500] = 5, Memoria[501] = 3, R1 = R2 = R3 = 0. Cada instrucción empieza con su FETCH. Tras hacer el primer FETCH a mano podrás usar «FETCH automático».',
+  groups(i) { return FETCH_G.concat(L4_PROG[i].exec); },
+  setup() {
+    this.state = { i: 0, g: 0, done: [], manual: 0, finished: false };
+    Game.prep({ reg: { PC: 0 }, mem: PROGRAM_MEM }, [0, 1, 2, 3, 4, 500, 501, 502]);
+    Sim.playing = true;
+    this.refresh();
+    UI.feedback('info', 'Primera instrucción', 'PC = 0. Empieza el FETCH de la instrucción en Memoria[0].');
+  },
+  phaseLabel() { const st = this.state; return st.finished ? 'Programa terminado' : st.g < 4 ? `FETCH · t${st.g + 1}` : `EJECUCIÓN de ${L4_PROG[st.i].ins.op}`; },
+  refresh() {
+    const st = this.state, T = tools(); T.innerHTML = '';
+    T.appendChild(toolTitle('Programa'));
+    const ul = h('ul', { class: 'prog' });
+    L4_PROG.forEach((p, k) => ul.appendChild(h('li', { class: k === st.i && !st.finished ? 'cur' : k < st.i ? 'done' : '' }, [h('span', { class: 'a' }, String(k)), (k < st.i ? '✓ ' : '') + p.ins.text])));
+    T.appendChild(ul);
+    T.appendChild(h('div', { class: 'card', style: 'margin-top:8px;font-size:12.5px' }, [h('b', {}, 'Paso actual: '), this.phaseLabel()]));
+    if (!st.finished && st.g === 0 && st.manual >= 1)
+      T.appendChild(h('button', { class: 'btn', style: 'width:100%;margin-bottom:6px', onclick: () => this.autoFetch() }, '⚡ FETCH automático (4 microoperaciones)'));
+    Object.entries(L4_PALETTE).forEach(([grp, ids]) => {
+      T.appendChild(toolTitle(grp));
+      ids.forEach(id => {
+        const m = MOPS[id];
+        T.appendChild(h('button', { class: 'mopbtn', disabled: st.finished ? 'disabled' : false, onclick: e => this.pick(id, e.currentTarget) },
+          [m.text.replace('DECODE (UC ← IR.opcode)', 'DECODE'), h('small', {}, m.signals.length ? 'señales: ' + m.signals.join(', ') : 'sin señales externas')]));
+      });
+    });
+  },
+  autoFetch() {
+    if (Sim.busy || this.state.g !== 0) return;
+    Sim.plan = [{ mops: ['MAR_PC'], tag: { l4a: 0 } }, { mops: ['MBR_MEM', 'PC_INC'], tag: { l4a: 1 } }, { mops: ['IR_MBR'], tag: { l4a: 2 } }, { mops: ['DECODE'], tag: { l4a: 3 } }];
+    Sim.play();
+  },
+  pick(id, btn) {
+    const st = this.state;
+    if (Sim.busy) return UI.toast('Espera a que termine la animación.');
+    if (st.finished) return;
+    if (Sim.plan.length) return UI.toast('FETCH automático en curso: usa ▶ Reproducir o ⏭ Siguiente para terminarlo.');
+    const grp = this.groups(st.i)[st.g];
+    const key = `l4-${st.i}-${st.g}-${st.done.length}`;
+    if (grp.includes(id) && !st.done.includes(id)) { Game.graded(key, true); Sim.exec([id], { l4: id }); return; }
+    btn.classList.add('bad'); setTimeout(() => btn.classList.remove('bad'), 450);
+    const e = this.explain(id);
+    Game.fail({ key, title: `«${MOPS[id].text.replace(' (UC ← IR.opcode)', '')}» no corresponde ahora`, msg: e + '<br><i>La simulación se detiene: esta microoperación no se ejecuta.</i>',
+      hint: 'Siguiente paso esperado: ' + grp.filter(x => !st.done.includes(x)).map(x => `<b>${MOPS[x].text.replace(' (UC ← IR.opcode)', '')}</b>`).join(' o '), comp: MOPS[id].comp });
+  },
+  explain(id) {
+    const st = this.state, s = Engine.s, ins = L4_PROG[st.i].ins, inFetch = st.g < 4;
+    const fetchIds = L4_PALETTE['Búsqueda (FETCH)'];
+    if (st.done.includes(id)) return 'Esa microoperación ya se ejecutó en este intervalo.';
+    if (inFetch) {
+      if (!fetchIds.includes(id)) return `La CPU aún está buscando la instrucción de Memoria[${st.g === 0 ? s.reg.PC : s.reg.MAR}]. Hasta que no esté en el IR y decodificada, la UC no sabe qué ejecutar.`;
+      if (id === 'MBR_MEM' && st.g === 0) return `El MAR todavía contiene ${fmt(s.reg.MAR)}, no la dirección del PC (${s.reg.PC}). Leerías la posición equivocada.`;
+      if (id === 'PC_INC' && st.g === 0) return 'Si incrementas el PC antes de copiarlo al MAR, se perdería la dirección de la instrucción actual y buscarías la siguiente.';
+      if (id === 'IR_MBR' && st.g < 2) return `El MBR aún no contiene la nueva instrucción (vale ${fmt(s.reg.MBR)}): falta leer la memoria en t2.`;
+      if (id === 'DECODE' && st.g < 3) return 'El IR todavía no contiene la nueva instrucción: no hay nada nuevo que decodificar.';
+      if (id === 'MAR_PC') return 'MAR ← PC ya se hizo en t1' + (s.reg.PC !== s.reg.MAR ? ` y ahora el PC ya apunta a la siguiente instrucción (${s.reg.PC}).` : '.');
+      if (id === 'MBR_MEM' || id === 'PC_INC') return 'Esa microoperación pertenece a t2, que ya pasó.';
+      return 'Respeta el orden del FETCH: t1 MAR ← PC, t2 MBR ← Memoria[MAR] y PC ← PC + I, t3 IR ← MBR, t4 DECODE.';
+    }
+    if (fetchIds.includes(id) && !(id === 'MBR_MEM' && ins.op === 'LOAD'))
+      return `«${ins.text}» ya está en el IR y decodificada. Ahora toca su fase de ejecución; volver a buscar saltaría la ejecución de esta instrucción.`;
+    const reg = id.slice(0, 2);
+    switch (id) {
+      case 'R1_MBR': case 'R2_MBR': case 'R3_MBR':
+        if (ins.op !== 'LOAD') return `Rn ← MBR sólo se usa en LOAD. «${ins.text}» no carga datos de memoria en un registro.`;
+        if (reg !== ins.r) return `El IR indica «${ins.text}»: el registro destino es ${ins.r}, no ${reg}.`;
+        return `El MBR aún no contiene el dato de Memoria[${ins.addr}] (contiene «${fmt(s.reg.MBR)}»). Primero MAR ← IR.dir y luego leer la memoria.`;
+      case 'MBR_MEM':
+        if (ins.op === 'LOAD') return `El MAR contiene ${fmt(s.reg.MAR)} (la dirección de la instrucción), no ${ins.addr}. Leerías un dato equivocado: primero MAR ← IR.dir.`;
+        if (ins.op === 'STORE') return 'STORE escribe en memoria. Leerla (MEM_READ) sobrescribiría el MBR.';
+        return `${ins.op} no accede a la memoria de datos.`;
+      case 'MAR_IRD': return `${ins.op} no usa ninguna dirección de memoria de datos.`;
+      case 'ALU_ADD': return `La ALU sólo interviene en ADD. «${ins.text}» no realiza operaciones aritméticas.`;
+      case 'R3_ALU': return ins.op === 'ADD' ? `La ALU todavía no ha calculado R1 + R2 (su salida vale ${fmt(s.reg.ALU)}).` : `R3 ← ALU es propio de ADD, no de ${ins.op}.`;
+      case 'MBR_R3': return ins.op === 'STORE' ? 'Ya está hecho.' : `MBR ← R3 prepara un STORE; «${ins.text}» no lo necesita.`;
+      case 'MEM_MBR':
+        if (ins.op === 'STORE') return `Antes de escribir hay que preparar la dirección (MAR ← IR.dir) y el dato (MBR ← R3). Ahora MAR = ${fmt(s.reg.MAR)} y MBR = «${fmt(s.reg.MBR)}»: se escribiría un valor incorrecto en una posición incorrecta.`;
+        return `${ins.op} no escribe en memoria; MEM_WRITE destruiría el contenido de Memoria[${fmt(s.reg.MAR)}].`;
+      case 'HALT': return 'HALT detendría la CPU sin terminar el programa.';
+    }
+    return `Esta microoperación no corresponde a «${ins.text}» en este momento.`;
+  },
+  advance(id) {
+    const st = this.state;
+    st.done.push(id);
+    const grp = this.groups(st.i)[st.g];
+    if (grp.every(x => st.done.includes(x))) {
+      st.g++; st.done = [];
+      if (st.g >= this.groups(st.i).length) { st.i++; st.g = 0; if (st.i >= L4_PROG.length) st.finished = true; }
+    }
+  },
+  afterStep(tag, res) {
+    if (!tag) return;
+    const st = this.state;
+    const startI = st.i;
+    if (tag.l4) { this.advance(tag.l4); if (tag.l4 === 'DECODE') st.manual = 1; }
+    if (tag.l4a !== undefined) { st.g++; st.done = []; }
+    const ins = L4_PROG[Math.min(st.i, 4)].ins;
+    if (st.finished) {
+      const v = Engine.s.mem[502];
+      Game.ok({ title: v === 8 ? '¡Misión completada! Memoria[502] = 8.' : 'Programa terminado', msg: `El 5 pasó de memoria a R1, el 3 a R2, la ALU calculó 5 + 3 = 8 en R3 y STORE lo guardó en Memoria[502] = ${fmt(v)}. Pulsa «Comprobar».` });
+    } else if (st.i !== startI) UI.feedback('ok', `✓ ${L4_PROG[startI].ins.text} completada`, `${MOPS[res.ids[0]].why}<br>Siguiente: FETCH de «${ins.text}» (PC = ${Engine.s.reg.PC}).`);
+    else UI.feedback('ok', `✓ ${res.after.lastMop}`, res.after.lastWhy + (st.g === 4 && st.done.length === 0 ? `<br><b>Instrucción decodificada:</b> ${ins.text}. Ahora ejecútala.` : ''));
+    this.refresh();
+  },
+  check() {
+    const s = Engine.s;
+    if (!this.state.finished) return Game.warn('Aún no', `El programa no ha terminado: vas por «${L4_PROG[this.state.i].ins.text}» (${this.phaseLabel()}).`);
+    if (s.mem[502] !== 8) return Game.fail({ title: 'Resultado incorrecto', msg: `Memoria[502] = ${fmt(s.mem[502])}, se esperaba 8.`, comp: 'MEM' });
+    Game.complete({ result: '¡Misión completada! Memoria[502] = 8.', signals: ['MAR_LOAD', 'MEM_READ', 'MBR_LOAD', 'PC_INC', 'IR_LOAD', 'REG_WRITE', 'ALU_OP=ADD', 'MEM_WRITE', 'HALT'],
+      why: 'Cada instrucción repitió el FETCH y luego ejecutó sus microoperaciones propias: LOAD (MAR ← IR.dir, MEM_READ, REG_WRITE), ADD (ALU_OP = ADD, REG_WRITE), STORE (MAR ← IR.dir, MBR ← R3, MEM_WRITE) y HALT.' });
+  },
+  hint() {
+    const st = this.state;
+    if (st.finished) return 'El programa terminó: pulsa «Comprobar».';
+    const grp = this.groups(st.i)[st.g].filter(x => !st.done.includes(x));
+    return `Estás en ${this.phaseLabel()} de «${L4_PROG[st.i].ins.text}». Siguiente: <b>${grp.map(x => MOPS[x].text.replace(' (UC ← IR.opcode)', '')).join('</b> o <b>')}</b>.`;
+  }
+};
+
+/* ---------------- NIVEL 5: Depura la CPU ---------------- */
+const L5_CH = [
+  { title: 'STORE R3, [502]', goal: 'Memoria[502] debe terminar valiendo 8.',
+    cpu: { reg: { PC: 4, IR: INS.store('R3', 502), MBR: INS.store('R3', 502), MAR: 3, R1: 5, R2: 3, R3: 8 }, mem: { 500: 5, 501: 3, 502: 0 } },
+    rows: [
+      { text: 'MAR ← IR.dir', opts: ['MAR_LOAD', 'MEM_READ'], init: 0, correct: 'MAR_LOAD', run: { MAR_LOAD: 'MAR_IRD' } },
+      { text: 'MBR ← R3', opts: ['MBR_LOAD', 'REG_WRITE'], init: 0, correct: 'MBR_LOAD', run: { MBR_LOAD: 'MBR_R3' } },
+      { text: 'Memoria[MAR] ← MBR', opts: ['(ninguna)', 'MEM_WRITE', 'MEM_READ'], init: 0, correct: 'MEM_WRITE', run: { '(ninguna)': 'MEM_NOWRITE', MEM_WRITE: 'MEM_MBR', MEM_READ: 'MBR_MEM' },
+        why: { '(ninguna)': 'El 8 viajó por el bus de datos hasta la interfaz de memoria, pero sin MEM_WRITE la memoria no lo almacenó: Memoria[502] sigue valiendo 0.',
+          MEM_READ: 'Con MEM_READ la memoria envió Memoria[502] (0) al MBR: el 8 que queríamos guardar se ha perdido y la memoria no cambió.' } }
+    ] },
+  { title: 'ADD R3, R1, R2', goal: 'R3 debe terminar valiendo 5 + 3 = 8.',
+    cpu: { reg: { PC: 3, IR: INS.add('R3', 'R1', 'R2'), MBR: INS.add('R3', 'R1', 'R2'), R1: 5, R2: 3, R3: 0 }, mem: { 500: 5, 501: 3, 502: 0 } },
+    rows: [
+      { text: 'ALU ← R1 (op) R2', opts: ['ALU_OP=SUB', 'ALU_OP=ADD'], init: 0, correct: 'ALU_OP=ADD', run: { 'ALU_OP=ADD': 'ALU_ADD', 'ALU_OP=SUB': 'ALU_SUB' },
+        why: { 'ALU_OP=SUB': 'Con ALU_OP = SUB la ALU calculó 5 − 3 = 2 en lugar de 5 + 3 = 8. Ese resultado erróneo es el que acabaría en R3.' } },
+      { text: 'R3 ← ALU', opts: ['REG_WRITE', 'MEM_WRITE'], init: 0, correct: 'REG_WRITE', run: { REG_WRITE: 'R3_ALU' } }
+    ] },
+  { title: 'HALT', goal: 'La CPU debe detenerse sin modificar ningún registro (R1 debe seguir valiendo 5).',
+    cpu: { reg: { PC: 5, IR: INS.halt(), MBR: INS.halt(), MAR: 4, R1: 5, R2: 3, R3: 8 }, mem: { 500: 5, 501: 3, 502: 8 } },
+    rows: [
+      { text: 'DECODE', opts: ['(ninguna)'], init: 0, correct: '(ninguna)', run: { '(ninguna)': 'DECODE' } },
+      { text: 'Detener la CPU', opts: ['HALT + REG_WRITE', 'HALT', 'REG_WRITE'], init: 0, correct: 'HALT', run: { 'HALT + REG_WRITE': 'HALT_REGW', HALT: 'HALT' },
+        why: { 'HALT + REG_WRITE': 'REG_WRITE sobraba: R1 capturó lo que había en el bus interno (la palabra de instrucción HALT del MBR) y el valor 5 se perdió.' } }
+    ] },
+  { title: 'LOAD R1, [500]', goal: 'R1 debe terminar valiendo 5 y Memoria[500] no debe cambiar.',
+    cpu: { reg: { PC: 1, IR: INS.load('R1', 500), MBR: INS.load('R1', 500), MAR: 0 }, mem: { 500: 5, 501: 3, 502: 0 } },
+    rows: [
+      { text: 'MAR ← IR.dir', opts: ['MAR_LOAD', 'PC_LOAD'], init: 0, correct: 'MAR_LOAD', run: { MAR_LOAD: 'MAR_IRD' } },
+      { text: 'MBR ↔ Memoria[MAR]', opts: ['MEM_WRITE', 'MEM_READ'], init: 0, correct: 'MEM_READ', run: { MEM_WRITE: 'MEM_MBR', MEM_READ: 'MBR_MEM' },
+        why: { MEM_WRITE: 'Con MEM_WRITE la memoria guardó el contenido del MBR (la palabra de instrucción) en Memoria[500]: ¡el dato 5 se ha destruido! R1 nunca recibiría el 5.' } },
+      { text: 'R1 ← MBR', opts: ['REG_WRITE', 'MEM_READ'], init: 0, correct: 'REG_WRITE', run: { REG_WRITE: 'R1_MBR' } }
+    ] }
+];
+const L5 = {
+  id: 5, short: 'Depuración', name: 'Nivel 5 · Depura la CPU', concept: 'depuracion',
+  objective: 'Encuentra la señal incorrecta en cada tabla de microoperaciones, observa su consecuencia y corrígela.',
+  instr: 'Cada tabla contiene <b>un error intencional</b>. Puedes ejecutarla para ver la consecuencia en la CPU, o corregir directamente la señal en el desplegable. Tras corregir, pulsa «Continuar» y la ejecución se reanuda desde la fila corregida.',
+  ch() { return L5_CH[this.state.ci]; },
+  setup() { this.state = { ci: 0 }; this.loadChallenge(); },
+  loadChallenge() {
+    const c = this.ch();
+    Object.assign(this.state, { sel: c.rows.map(r => r.init), ri: 0, bug: null, histMark: 0, passed: false, rowSt: c.rows.map(() => '') });
+    Game.prep(Object.assign({ decoded: true }, c.cpu), [500, 501, 502]);
+    Sim.history = []; Sim.plan = []; Sim.playing = false;
+    this.refresh();
+    UI.feedback('info', `Tabla ${this.state.ci + 1}/4: ${c.title}`, `Objetivo: ${c.goal} Busca la señal errónea.`);
+  },
+  refresh() {
+    const st = this.state, c = this.ch(), T = tools(); T.innerHTML = '';
+    T.appendChild(toolTitle(`Tabla ${st.ci + 1} de ${L5_CH.length} · ${c.title}`));
+    T.appendChild(h('p', { class: 'small-note' }, 'Objetivo: ' + c.goal));
+    const tb = h('table', { class: 'dbg' });
+    tb.appendChild(h('tr', {}, [h('th', {}, ''), h('th', {}, 'Microoperación'), h('th', {}, 'Señales')]));
+    c.rows.forEach((r, i) => {
+      const sel = h('select', { disabled: (Sim.busy || st.passed || i < st.ri) ? 'disabled' : false, onchange: e => { st.sel[i] = +e.target.value; st.rowSt[i] = ''; this.refresh(); } },
+        r.opts.map((o, k) => { const op = h('option', { value: k }, o); if (k === st.sel[i]) op.selected = true; return op; }));
+      const icon = st.rowSt[i] === 'ok' ? '✓' : st.rowSt[i] === 'bug' ? '✗' : (i === st.ri && !st.passed ? '▸' : '');
+      tb.appendChild(h('tr', { class: st.rowSt[i] === 'ok' ? 'okr' : st.rowSt[i] === 'bug' ? 'bug' : '' }, [h('td', { class: 'st' }, icon), h('td', { class: 'mono' }, `t${i + 1}: ${r.text}`), h('td', {}, sel)]));
+    });
+    T.appendChild(tb);
+    if (st.passed) T.appendChild(h('button', { class: 'btn ok', style: 'margin-top:10px;width:100%', onclick: () => this.nextChallenge() }, st.ci < L5_CH.length - 1 ? 'Siguiente tabla ▶' : 'Finalizar nivel ▶'));
+    else T.appendChild(h('button', { class: 'btn primary', style: 'margin-top:10px;width:100%', onclick: () => this.run() }, st.bug !== null ? '▶ Continuar desde la fila corregida' : (st.ri > 0 ? '▶ Continuar ejecución' : '▶ Ejecutar tabla')));
+  },
+  run() {
+    if (Sim.busy) return UI.toast('Espera a que termine la animación.');
+    let st = this.state;
+    if (st.bug !== null) {
+      const r = this.ch().rows[st.bug];
+      if (r.opts[st.sel[st.bug]] !== r.correct && st.sel[st.bug] === r.init) return UI.toast('Primero cambia la señal de la fila marcada en rojo.');
+      // Restaura la CPU al estado previo a la fila errónea, conservando la corrección
+      const sel = st.sel.slice(), mark = st.histMark;
+      while (Sim.history.length > mark) Sim.undo(true);
+      st = this.state; st.sel = sel; st.bug = null; st.rowSt = st.rowSt.map((v, i) => i < st.ri ? 'ok' : '');
+      UI.history('↶ CPU restaurada antes de la fila corregida', 'info');
+    }
+    this.runRow(st.ri);
+  },
+  runRow(r) {
+    const st = this.state, c = this.ch();
+    if (r >= c.rows.length) return;
+    const row = c.rows[r], opt = row.opts[st.sel[r]], mop = row.run[opt];
+    if (!mop) {
+      st.rowSt[r] = 'bug';
+      Game.fail({ key: `l5-${st.ci}-${r}`, title: `Fila ${r + 1}: ${opt} no produce «${row.text}»`, msg: `Con la señal ${opt} no se realiza la transferencia ${row.text}: esa señal controla otro componente. La ejecución se detiene en esta fila.`,
+        hint: 'Pregúntate qué componente debe capturar el dato en esta microoperación.', comp: 'UC' });
+      return this.refresh();
+    }
+    st.histMark = Sim.history.length;
+    st.rowSt[r] = 'run';
+    Sim.plan = [{ mops: [mop], tag: { l5: r } }];
+    this.refresh();
+    Sim.play();
+  },
+  afterStep(tag) {
+    if (!tag || tag.l5 === undefined) return;
+    const st = this.state, c = this.ch(), r = tag.l5, row = c.rows[r], opt = row.opts[st.sel[r]];
+    if (opt !== row.correct) {
+      st.bug = r; st.rowSt[r] = 'bug'; Sim.playing = false; Sim.plan = [];
+      const planted = st.sel[r] === row.init;
+      const msg = (row.why && row.why[opt]) || `La señal ${opt} no es la adecuada para ${row.text}.`;
+      if (planted) {
+        Game.setStatus('incorrecto');
+        Renderer.flashComp(MOPS[row.run[opt]].comp, 'err');
+        UI.feedback('err', `Consecuencia del error en la fila ${r + 1}`, msg + (Game.guided ? `<div class="hint">💡 Pista: cambia la señal de la fila ${r + 1} y pulsa «Continuar».</div>` : '') + '<div class="retry">Corrige la señal: la CPU se restaurará al estado anterior a esta fila.</div>');
+        UI.history(`✗ Consecuencia observada en fila ${r + 1}`, 'err');
+      } else Game.fail({ key: `l5-${st.ci}-${r}`, title: `Fila ${r + 1}: ${opt} también es incorrecta`, msg, hint: `La microoperación es «${row.text}»: ¿qué componente debe actuar?`, comp: MOPS[row.run[opt]].comp });
+      return this.refresh();
+    }
+    st.rowSt[r] = 'ok'; st.ri = r + 1;
+    if (st.ri < c.rows.length) { this.refresh(); this.runRow(st.ri); return; }
+    st.passed = true;
+    const fixed = c.rows.findIndex(x => x.opts[x.init] !== x.correct);
+    Game.ok({ key: `l5-${st.ci}`, title: `✓ Tabla ${c.title} depurada`, msg: `${c.goal.replace('debe terminar valiendo', 'termina valiendo').replace('debe detenerse', 'se detiene').replace('debe terminar', 'termina')} La señal correcta en la fila ${fixed + 1} es <b>${c.rows[fixed].correct}</b>.` });
+    this.refresh();
+  },
+  nextChallenge() {
+    if (this.state.ci < L5_CH.length - 1) { this.state.ci++; this.loadChallenge(); }
+    else this.check();
+  },
+  check() {
+    const st = this.state;
+    if (!(st.ci === L5_CH.length - 1 && st.passed)) return Game.warn('Aún no', `Depura todas las tablas (vas por la ${st.ci + 1} de ${L5_CH.length}).`);
+    Game.complete({ result: 'Has corregido STORE sin MEM_WRITE, ADD con ALU_OP equivocada, HALT con REG_WRITE y LOAD con MEM_WRITE.', signals: ['MEM_WRITE', 'ALU_OP=ADD', 'HALT', 'MEM_READ'],
+      why: 'Una señal ausente impide la acción (el dato llega a la memoria pero no se guarda); una señal sobrante produce efectos no deseados (registros corrompidos, memoria destruida); y una señal equivocada produce un resultado erróneo. La UC debe activar exactamente las señales necesarias.' });
+  },
+  hint() {
+    const c = this.ch(); const b = c.rows.findIndex(x => x.opts[x.init] !== x.correct);
+    return `Revisa la fila ${b + 1} («${c.rows[b].text}»): ¿la señal permite que el componente destino realmente capture el dato?`;
+  }
+};
+
+/* ---------------- NIVEL 6: Saltos condicionales ---------------- */
+const L6_MEM = { 8: INS.sub('R3', 'R1', 'R2'), 9: INS.jz(20), 10: INS.add('R3', 'R1', 'R2'), 11: INS.halt(), 20: INS.store('R3', 502) };
+const L6_SC = [{ R1: 5, R2: 5 }, { R1: 5, R2: 3 }];
+const fetchPlan = tag => [{ mops: ['MAR_PC'] }, { mops: ['MBR_MEM', 'PC_INC'] }, { mops: ['IR_MBR'] }, { mops: ['DECODE'], tag }];
+const L6 = {
+  id: 6, short: 'Saltos', name: 'Nivel 6 · Saltos condicionales', concept: 'saltos',
+  objective: 'Decide qué debe hacer la Unidad de Control con el PC al ejecutar JZ según el valor de la bandera Z.',
+  instr: 'Programa: <span class="mono">8: SUB R3,R1,R2 · 9: JZ 20 · 10: ADD… · 20: STORE…</span>. Primero se ejecuta SUB (que actualiza Z) y se busca JZ. Observa el <b>selector de entrada del PC</b> (arriba a la izquierda). Recuerda: tras el FETCH, el PC <b>ya vale PC + I</b>.',
+  setup() { this.state = { sc: 0, phase: 'auto', passed: [false, false] }; this.loadScenario(); },
+  loadScenario() {
+    const sc = L6_SC[this.state.sc];
+    this.state.phase = 'auto';
+    Game.prep({ reg: { PC: 8, R1: sc.R1, R2: sc.R2, R3: 0 }, mem: L6_MEM }, [8, 9, 10, 11, 20]);
+    Sim.history = [];
+    Sim.plan = [...fetchPlan(), { mops: ['ALU_SUB'] }, { mops: ['R3_ALU'] }, ...fetchPlan({ l6: 'fetched' })];
+    this.refresh();
+    UI.feedback('info', `Escenario ${this.state.sc + 1}/2: R1 = ${sc.R1}, R2 = ${sc.R2}`, 'Observa cómo se ejecuta SUB R3,R1,R2 y cómo la ALU actualiza la bandera Z. Después se busca JZ 20. (Puedes pausar o avanzar paso a paso.)');
+    Sim.play();
+  },
+  refresh() {
+    const st = this.state, s = Engine.s, T = tools(); T.innerHTML = '';
+    T.appendChild(toolTitle(`Escenario ${st.sc + 1} de 2`));
+    T.appendChild(h('div', { class: 'card', style: 'font-size:13px' }, [
+      h('div', { html: `R1 = <b>${s.reg.R1}</b> · R2 = <b>${s.reg.R2}</b> · ALU = <b>${fmt(s.reg.ALU)}</b>` }),
+      h('div', { html: `Bandera <b>Z = <span style="color:var(--warn);font-size:18px">${s.reg.Z}</span></b> ${st.phase === 'auto' ? '(se actualizará con SUB)' : s.reg.Z ? '→ el último resultado fue 0' : '→ el último resultado NO fue 0'}` }),
+      h('div', { html: `PC = <b>${s.reg.PC}</b> · IR = <b>${fmt(s.reg.IR)}</b>` })]));
+    T.appendChild(toolTitle('¿Qué hace la UC con el PC?'));
+    const d = h('div', { class: 'decis' });
+    [['jump', 'PC ← IR.dir', 'PC_LOAD = 1 · selector = destino (dir)'], ['keep', 'Conservar el PC', 'PC_LOAD = 0 · el PC ya contiene PC + I'], ['inc', 'PC ← PC + I otra vez', 'PC_INC · incrementar de nuevo']].forEach(([k, t, sub]) =>
+      d.appendChild(h('button', { class: 'mopbtn', disabled: st.phase !== 'decide' ? 'disabled' : false, onclick: () => this.choose(k) }, [t, h('small', {}, sub)])));
+    T.appendChild(d);
+    T.appendChild(h('p', { class: 'small-note' }, st.phase === 'auto' ? 'Espera a que termine la ejecución de SUB y la búsqueda de JZ…' : st.phase === 'decide' ? 'JZ está decodificada: elige la acción de la UC.' : 'Escenario resuelto.'));
+    if (st.phase === 'done' && st.sc === 0) T.appendChild(h('button', { class: 'btn ok', style: 'width:100%', onclick: () => { this.state.sc = 1; this.loadScenario(); } }, 'Siguiente escenario ▶'));
+  },
+  afterStep(tag) {
+    if (tag && tag.l6 === 'fetched') {
+      this.state.phase = 'decide';
+      const z = Engine.s.reg.Z;
+      UI.feedback('info', `JZ 20 decodificada · Z = ${z}`, `El PC ya vale ${Engine.s.reg.PC} (se incrementó durante el FETCH). ¿Qué debe hacer la UC?`);
+    }
+    this.refresh();
+  },
+  async choose(k) {
+    const st = this.state;
+    if (Sim.busy || st.phase !== 'decide') return;
+    const z = Engine.s.reg.Z, correct = z === 1 ? 'jump' : 'keep';
+    const mop = { jump: 'PC_IRD', keep: 'PC_KEEP', inc: 'PC_INC' }[k];
+    const key = `l6-${st.sc}`;
+    st.phase = 'exec'; this.refresh();
+    await Sim.exec([mop], { l6: 'dec' });
+    if (k === correct) {
+      await Sim.exec(['MAR_PC'], { l6: 'next' });
+      st.phase = 'done'; st.passed[st.sc] = true;
+      Game.ok({ key, title: z ? '✓ Salto tomado: PC = 20' : '✓ Salto no tomado: PC = 10',
+        msg: (z ? 'Z = 1: la condición se cumple. PC_LOAD = 1 y el selector eligió IR.dir: el PC pasó a 20.' : 'Z = 0: la condición no se cumple. PC_LOAD = 0: el PC conserva 10, que es PC + I calculado en el FETCH. No hay que volver a incrementarlo.') +
+          ` La siguiente búsqueda (MAR ← PC) ya apunta a Memoria[${Engine.s.reg.MAR}] = «${fmt(Engine.s.mem[Engine.s.reg.MAR])}».` + (st.sc === 1 ? ' Pulsa «Comprobar».' : '') });
+      this.refresh();
+    } else {
+      const why = {
+        '1keep': 'Z = 1 significa que el resultado anterior fue 0: la condición del salto SÍ se cumple. Si el PC conserva 10, se ejecutaría la instrucción siguiente en lugar de saltar a 20.',
+        '1inc': 'Incrementar otra vez llevó el PC a 11: no es ni el destino (20) ni la secuencial (10). Con Z = 1 hay que cargar IR.dir en el PC.',
+        '0jump': 'Z = 0: el resultado anterior no fue 0, así que la condición NO se cumple. Cargar 20 en el PC provocó un salto indebido.',
+        '0inc': 'El PC ya se había incrementado durante el FETCH (valía 10). Incrementarlo otra vez (11) se saltaría la instrucción ADD de la dirección 10.'
+      }[z + k];
+      Game.fail({ key, title: `Flujo incorrecto: PC = ${Engine.s.reg.PC}`, msg: why + ' <i>Observa la consecuencia; la CPU volverá al punto de decisión.</i>',
+        hint: 'JZ = “saltar si Z = 1”. Si salta, el PC recibe el destino; si no, conserva el valor secuencial ya calculado.', comp: 'PC' });
+      await Anim.wait(1500);
+      if (!Sim.busy) { Sim.undo(true); this.state.phase = 'decide'; UI.history('↶ PC restaurado: vuelve a decidir', 'info'); this.refresh(); }
+    }
+  },
+  check() {
+    if (!this.state.passed.every(Boolean)) return Game.warn('Aún no', 'Resuelve los dos escenarios (Z = 1 y Z = 0).');
+    Game.complete({ result: 'Con Z = 1 el PC cargó el destino (20); con Z = 0 conservó la dirección secuencial (10).', signals: ['ALU_OP=SUB', 'PC_LOAD'],
+      why: 'Las banderas de estado permiten a la UC decidir el flujo: JZ activa PC_LOAD sólo si Z = 1. Como el PC ya se incrementó en el FETCH, cuando el salto no se toma basta con no cargar nada.' });
+  },
+  hint() {
+    const z = Engine.s.reg.Z;
+    if (this.state.phase !== 'decide') return 'Espera a que JZ esté decodificada. Fíjate en el valor de Z tras SUB.';
+    return z ? 'Z = 1 → la condición de JZ se cumple: ¿de dónde debe tomar el PC su nuevo valor?' : 'Z = 0 → la condición no se cumple. ¿Qué valor tiene ya el PC tras el FETCH?';
+  }
+};
+
+const LEVELS = { 1: L1, 2: L2, 3: L3, 4: L4, 5: L5, 6: L6 };
+
+/* =====================================================================
+   9. ARRANQUE
+   ===================================================================== */
+function start() {
+  Store.load();
+  Renderer.build();
+  UI.init();
+  Anim.init();
+  Game.setMode(Store.data.mode);
+  let lv = Store.data.current || 1;
+  while (lv > 1 && !Game.unlocked(lv)) lv--;
+  Game.load(lv);
+  setInterval(() => UI.stats(), 1000);
+  if (!Store.data.seenIntro) {
+    Store.data.seenIntro = true; Store.save();
+    UI.modal(`<h2>CPU Quest: Misión Unidad de Control</h2>
+      <p>Bienvenido al laboratorio. Vas a <b>construir y ejecutar</b> operaciones dentro de una CPU didáctica y verás en tiempo real cómo los datos viajan por los buses, cómo cambian los registros y qué señales activa la Unidad de Control.</p>
+      <p>Seis misiones: componentes → señales → FETCH → ejecución → depuración → saltos condicionales. Cada error se explica y puedes corregirlo sin reiniciar.</p>
+      <p class="small-note">En este procesador cada instrucción ocupa una posición de memoria, por eso <b>I = 1</b> en PC ← PC + I.</p>
+      <p class="small-note">Creado por <b>${AUTHOR}</b></p>`, [{ text: '¡Empezar misión!', cls: 'primary' }]);
+  }
+}
+document.addEventListener('DOMContentLoaded', start);
+</script>
+</body>
+</html>
