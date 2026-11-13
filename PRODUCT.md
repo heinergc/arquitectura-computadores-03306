@@ -36,6 +36,7 @@ Resources built by the course tutor around the exact concepts of the course (Sta
 - Must run on GitHub Pages and from local files in Chrome, Edge and Firefox.
 - Resources currently have independent visual styles (CPU Quest dark navy; Von Neumann dark IBM Plex; Glosario light blue).
 - Open: whether more resources will be added later (structure should allow it).
+- Anonymous visit counting with GoatCounter (account arq03306, confirmed by the author): no cookies, no personal data; counts page views only, not who visited.
 
 ## Brand Commitments
 

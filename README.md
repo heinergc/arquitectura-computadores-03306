@@ -30,3 +30,7 @@ PRODUCT.md, DESIGN.md decisiones de producto y de diseño del portal
 ```
 
 Material didáctico complementario basado en los conceptos de Unidad de Control y ciclo de instrucción (Stallings, capítulo 19). No es un documento institucional oficial de la UNED.
+
+## Estadística de visitas
+
+El sitio cuenta visitas de forma anónima con [GoatCounter](https://www.goatcounter.com/) (sin cookies ni datos personales). No cuenta cuando las páginas se abren como archivos locales. Panel: https://arq03306.goatcounter.com

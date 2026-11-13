@@ -1,0 +1,20 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "barlow condensed",
+        "createdAt": "2026-11-12T23:53:28.876Z",
+        "reason": "Claude: font only appears in unchosen decision-page sketches under .impeccable/mocks/decision (gitignored, never shipped); shipped site uses Source Serif 4 / Source Sans 3 per DESIGN.md"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "atkinson hyperlegible",
+        "createdAt": "2026-11-12T23:53:29.792Z",
+        "reason": "Claude: font only appears in unchosen decision-page sketches under .impeccable/mocks/decision (gitignored, never shipped); shipped site uses Source Serif 4 / Source Sans 3 per DESIGN.md"
+      }
+    ]
+  }
+}
